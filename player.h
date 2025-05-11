@@ -1,0 +1,339 @@
+ 
+
+#pragma once
+
+#include <chrono>
+#include <map>
+#include <optional>
+#include <set>
+
+#include "blitzmap.h"
+#include "faction.h"
+#include "game.h"
+#include "probabilities.h"
+#include "rating.h"
+
+struct PeakRating
+{
+    std::chrono::year_month_day date;
+    double adjustedElo = -1.0;
+    double deviation;
+    factions::Faction faction;
+};
+
+struct HighestRatedVictories
+{
+    uint32_t gameId;
+    double ratingDifference;
+    bool operator<(const HighestRatedVictories &hrd) const
+    {
+        // Want highest difference at the top.
+        if (ratingDifference != hrd.ratingDifference)
+        {
+            return ratingDifference < hrd.ratingDifference;
+        }
+        else
+        {
+            return gameId < hrd.gameId;
+        }
+    }
+};
+
+struct LowestRatedDefeats
+{
+    uint32_t gameId;
+    double ratingDifference;
+    bool operator<(const LowestRatedDefeats &hrd) const
+    {
+        // Want highest difference at the top.
+        if (ratingDifference != hrd.ratingDifference)
+        {
+            return ratingDifference < hrd.ratingDifference;
+        }
+        else
+        {
+            return gameId < hrd.gameId;
+        }
+    }
+};
+
+// Forward declarations:
+class Players;
+
+class Player
+{
+public:
+    //! Constructor.
+    Player(uint32_t userId = 0xFFFFFFFF);
+
+    //! Destructor.
+    ~Player();
+
+public:
+    //! Get the user id.
+    uint32_t userId() const;
+
+    //! The the players account name.
+    void setAccount(const std::string &account);
+
+    //! The players account name.
+    std::string account() const;
+
+    //! Set the players alias (a.k.a tournament name).
+    void setAlias(const std::string &alias, bool confirmed);
+
+    //! Get the players alias. Either return the raw alias (which might be empty)
+    //! if player is not known to the community or return the most often used quick match
+    //! name in case there is no alias.
+    std::string alias(bool considerMostOftenUsedQuickMatchName) const;
+
+    //! Add an alternative alias for the player. Needs to be unique over all players.
+    void addAltAlias(const std::string& altAlias);
+
+    //! Get the list of all alias names (including the current one).
+    std::vector<std::string> aliasList() const;
+
+    //! Check if the player is known by the given alias.
+    bool hasAlias(const std::string &alias) const;
+
+    //! Does this player have a tournament name?
+    bool hasConfirmedAlias() const;
+
+    //! Number of wins.
+    uint32_t wins() const;
+
+    //! Number of losses.
+    uint32_t losses() const;
+
+    //! Number of draws.
+    uint32_t draws() const;
+
+    //! Set the creation date of this player.
+    void setCreationDate(const std::string &date);
+
+    //! Get the date of creation of the player account.
+    std::string creationDate() const;
+
+    //! Get the list of quick match names.
+    const std::vector<std::string>& qmNames(gamemodes::GameMode gameMode) const;
+
+    //! Add a qm name.
+    void addQmName(gamemodes::GameMode gameMode, const std::string &name, bool mightExist);
+
+    //! Increase the amount the given name has been used in the given game mode
+    //! by 1.
+    void addQmNameUsage(const std::string &name);
+
+    //! Get the rating of the player.
+    double elo(factions::Faction faction) const;
+
+    //! Get the rating deviation of the player.
+    double deviation(factions::Faction faction) const;
+
+    //! Get the glicko-2 volatility of the player.
+    double volatility(factions::Faction faction) const;
+
+    //! Process the given game.
+    void processGame(const Game& game, int index, bool instantUpdate, const Players &players);
+
+    //! Decay the ratings for all factions.
+    void decay();
+
+    //!
+    const Rating& rating(factions::Faction faction) const { return _ratings[faction]; }
+
+    void apply(std::chrono::year_month_day date, bool decay);
+
+    //! Update a players rating.
+    Rating::CalculationType update();
+
+    //! Check how many days can pass until this players becomes inactive.
+    //! Returns 0 if the player is already inactive.
+    int daysToInactivity() const;
+
+    //! Number of days since the last game was played.
+    int daysFromLastGame() const;
+
+    //! Number of days since the first game was plyed.
+    int daysFromFirstGame() const;
+
+    //! Number of days that player has been inactive.
+    int daysInactive() const;
+
+    //! Has this player ever been active?
+    bool wasActive() const;
+
+    //! Has this player ever been active for the given faction?
+    bool wasActive(factions::Faction faction) const;
+
+    //! Has this player been active for the given date?
+    bool wasActiveBefore(const std::chrono::year_month_day &date, factions::Faction faction) const;
+
+    //! The players best active faction.
+    factions::Faction getBestActiveFaction() const;
+
+    //! Get the maximum rating for this players. Return the rating of
+    //! the highest active rating.
+    double maxRating(bool includeInactive = false) const;
+
+    //! Check if a specific faction is active.
+    bool isActive(factions::Faction faction) const;
+
+    //! Check if the player is active at all.
+    bool isActive() const;
+
+    //! Get the number of active days.
+    int daysActive(bool sinceFirstActivation) const;
+
+    //! Get the number of games played.
+    uint32_t gameCount() const;
+
+    //! Number of games pending.
+    uint32_t pendingGameCount() const;
+
+    //! Get the number of games played with the given faction.
+    uint32_t gameCount(factions::Faction faction) const;
+
+    //! Get the most often used quick match name..
+    std::string qmName() const;
+
+    //! Get the peak rating for a specific faction.
+    PeakRating peakRating(factions::Faction faction) const;
+
+    //! Get the overall peak rating.
+    PeakRating peakRating() const;
+
+    //! Date of the first game.
+    std::string firstGame() const;
+
+    //! Date of the last game.
+    std::string lastGame() const;
+
+    //! The number of overall days this player has been active.
+    int daysActive() const;
+
+    //! Finalize any kind of calculation.
+    void finalize();
+
+    //! Get the highest rated victories of this player.
+    const std::set<HighestRatedVictories>& highestRatedVictories() const;
+
+    //! Get the lowest rated defeats of this player.
+    const std::set<LowestRatedDefeats>& lowestRatedDefeats() const;
+
+    //! Get the stats against other players.
+    const std::map<uint32_t, Probabilities>& vsOtherPlayers() const;
+
+    //! Get the probabilities for a specific map.
+    const Probabilities& mapStats(gamesetup::Setup setup, int mapIndex) const;
+
+    //! Get historical elo values for the given faction.
+    std::map<std::chrono::year_month_day, std::pair<double, double>> historicalElo(factions::Faction faction) const;
+
+    //! Check lexical order. Considers brackets.
+    bool lowerLexicalOrder(const Player &other) const;
+
+private:
+    //! User id. 0 if invalid player.
+    uint32_t _userId = 0;
+
+    //! Number of wins.
+    uint32_t _wins;
+
+    //! Number of losses.
+    uint32_t _losses;
+
+    //! Number of draws.
+    uint32_t _draws;
+
+    //! Account name.
+    std::string _account;
+
+    //! The player's name used in tournament. Might be the most used quick match name, but
+    //! can also a name, which was manually set.
+    std::string _alias;
+
+    //! Alternate alias names. If the alias changes, tournament games might contain invalid
+    //! names. That's why we need to keep a list of alias.
+    std::vector<std::string> _altAliasList;
+
+    //! Is this a confirmed alias (a.k.a tournament name)?
+    bool _confirmedAlias = false;
+
+    //! Did we manually assign a name?
+    bool _manuallyAssignedAlias = false;
+
+    //! Initial rating. Not present if player has never been active.
+    std::optional<double> _initialRating = {};
+
+    //! The number of game it took to become an active player for the first time.
+    uint32_t _gamesToBecomeActive = 0;
+
+    //! The date this account has been created.
+    std::chrono::year_month_day _created;
+
+    //! List of all quick match names and their corresponding user id.
+    std::vector<std::string> _qmNames[gamemodes::count()];
+
+    //! Quick match names, which are actually used along with the amount of times.
+    std::map<std::string, uint32_t> _usedQmNames;
+
+    //! The ratings for each faction.
+    std::array<Rating, factions::count()> _ratings;
+
+    //! A combined rating used for the deviation to track if
+    //! a player is active or inactive.
+    Rating _ratingCombined;
+
+    //! The number of games played for each faction.
+    std::array<uint32_t, factions::count()> _gameCount = { 0 };
+
+    //! The peak ratings for each faction.
+    std::array<PeakRating, factions::count()> _peakRatings;
+
+    //! The date of the last game played.
+    std::chrono::year_month_day _lastGame;
+
+    //! The date of the first game played.
+    std::chrono::year_month_day _firstGame;
+
+    //! Pending games for each faction, including the combined rating.
+    std::vector<std::array<double, 3>> _pendingGames[factions::count()];
+
+    //! Pending results for each faction, including the combined results.
+    std::vector<double> _pendingResults[factions::count()];
+
+    //! Vector for each faction, which is set to true if at least one
+    //! game was played in the current rating period. Used to add decay
+    //! if no game was played.
+    std::array<bool, factions::count()> _updated = { false };
+
+    //! Status list for this player. Alternating dates where a player
+    //! goes active (index 0, 2, ...) or inactive (index 1, 3, ...).
+    std::vector<std::chrono::year_month_day> _statusList;
+
+    //! Inactive/active dates for each faction. Way too complicated, but here's
+    //! how it works. With the first date you go active, the second date is the
+    //! day where you became inactive again. Odd number of values means you are
+    //! active and an even number of values means you are inactive. Basically
+    //! the same as above, but for each faction.
+    std::array<std::vector<std::chrono::year_month_day>, factions::count()> _factionStatusList;
+
+    //! Elo by date for each faction. First value of the pair is the elo, second
+    //! the deviation.
+    std::map<std::chrono::year_month_day, std::array<std::pair<double, double>, factions::count()>> _eloByDate;
+
+    //! List of highest rated victories. Stripped down to 20 elements max.
+    std::set<HighestRatedVictories> _hightestRatedVictories;
+
+    //! List of lowest rated victories. Stripped down to 20 elements max.
+    std::set<LowestRatedDefeats> _lowestRatedDefeats;
+
+    //! Statistic against each other player.
+    std::map<uint32_t, Probabilities> _vsPlayer;
+
+    //! Map statistics for each faction setup.
+    std::array<std::array<Probabilities, blitzmap::count()>, gamesetup::Unknown> _mapStats;
+
+}; // class Player
+
