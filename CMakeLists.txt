@@ -59,7 +59,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(json)
 
 # Executable
-add_executable(user_lookup ${SOURCES} ${HEADERS})
+add_executable(elogen ${SOURCES} ${HEADERS})
 
 # Link connector libraries
 target_link_libraries(elogen PUBLIC mysqlcppconn nlohmann_json::nlohmann_json)
