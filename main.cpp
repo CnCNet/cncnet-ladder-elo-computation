@@ -161,13 +161,12 @@ void fetchRecentGamesByLadder(
 
 int main()
 {
-
     try
     {
         sql::mysql::MySQL_Driver *driver = sql::mysql::get_mysql_driver_instance();
         std::unique_ptr<sql::Connection> con(
-            driver->connect("tcp://127.0.0.1:3307", "cncnet", "cncnet")
-            //driver->connect("tcp://host.docker.internal:3307", "cncnet", "cncnet")
+            //driver->connect("tcp://127.0.0.1:3307", "cncnet", "cncnet")
+            driver->connect("tcp://host.docker.internal:3307", "cncnet", "cncnet")
         );
         con->setSchema("cncnet_api");
 
