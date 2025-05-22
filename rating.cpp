@@ -116,7 +116,7 @@ double Rating::volatility(const std::vector<std::array<double, 3>> &opponents, c
     // Step 5
     // 5.1
     const double a = log(pow(_volatility, 2));
-    auto f = [=](double x)
+    auto f = [&, this](double x)
     {
         return exp(x) * (pow(delta, 2) - pow(_deviation, 2) - variance - exp(x)) / (2 * pow(pow(_deviation, 2) + variance + exp(x), 2)) - (x - a) / pow(glicko::tau, 2);
     };

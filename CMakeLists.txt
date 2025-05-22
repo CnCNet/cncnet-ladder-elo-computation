@@ -1,6 +1,6 @@
 
 cmake_minimum_required(VERSION 3.14)
-project(MySQLUserLookup LANGUAGES CXX)
+project(CnCNet_ELO LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,22 +11,20 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     endif()
 endif()
 
-# Requires
-# sudo apt install libmysqlcppconn-dev
-
-include(FetchContent)
-
 set(SOURCES
     blitzmap.cpp
+    databaseconnection.cpp
     main.cpp
     game.cpp
+    gamemode.cpp
     gametype.cpp
     faction.cpp
     knownplayers.cpp
     logging.cpp
-    #mapstats.cpp
-    #player.cpp
-    #players.cpp
+    mapstats.cpp
+    options.cpp
+    player.cpp
+    players.cpp
     probabilities.cpp
     rating.cpp
     stringtools.cpp
@@ -35,14 +33,17 @@ set(SOURCES
 set(HEADERS
     blitzmap.h
     cplusplus.h
+    databaseconnection.h
     game.h
+    gamemode.h
     gametype.h
     faction.h
     knownplayers.h
     logging.h
-    #mapstats.h
-    #player.h
-    #players.h
+    mapstats.h
+    options.h
+    player.h
+    players.h
     probabilities.h
     rating.h
     stringtools.h
@@ -58,14 +59,24 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(json)
 
-# Executable
-add_executable(user_lookup ${SOURCES} ${HEADERS})
+FetchContent_Declare(
+  cxxopts
+  GIT_REPOSITORY https://github.com/jarro2783/cxxopts.git
+  GIT_TAG        v3.2.1
+)
 
-# Link connector libraries
+FetchContent_MakeAvailable(cxxopts)
+
+
+# Executable.
+add_executable(elogen ${SOURCES} ${HEADERS})
+
+# MySQL connector libraries.
 target_link_libraries(elogen PUBLIC mysqlcppconn nlohmann_json::nlohmann_json)
 
-# Required for include paths
+# Required for include paths.
 target_include_directories(elogen
   PUBLIC
     ${mysqlcppconn_SOURCE_DIR}/include
+    ${cxxopts_SOURCE_DIR}/include
 )

@@ -1,5 +1,4 @@
  
-
 #pragma once
 
 #include <chrono>
@@ -19,7 +18,7 @@ class Game
 public:
     struct Participant
     {
-        uint32_t id;
+        uint32_t userId;
         std::string playerName;
         factions::Faction faction;
         bool hasWon;
@@ -43,7 +42,7 @@ public:
     double result(uint32_t index) const;
 
     //! Set the player id of a specific player.
-    void setPlayer(uint32_t index, uint32_t playerId);
+    void setPlayer(uint32_t index, uint32_t userId);
 
     //! Set the players. No sanity check is done. Player ids must be valid.
     void setPlayers(uint32_t player1, uint32_t player2);
@@ -57,8 +56,8 @@ public:
     //! Do the given two players match in this game?
     bool isVs(KnownPlayers player1, KnownPlayers player2) const;
 
-    //! Id if a specific player.
-    uint32_t playerId(uint32_t index) const;
+    //! User id of the player with the given index.
+    uint32_t userId(uint32_t index) const;
 
     //! Check if a player has won.
     bool hasWon(uint32_t index) const;
@@ -128,7 +127,7 @@ public:
     bool isUnderdogWin() const;
 
     //! Set rating and deviation for a player.
-    //void setRatingAndDeviation(uint32_t playerIndex, double rating, double deviation);
+    void setRatingAndDeviation(uint32_t playerIndex, double rating, double deviation);
 
     //! Get the rating of the given player.
     double rating(uint32_t index) const;
@@ -187,8 +186,8 @@ public:
             const Participant &p1 = game._participants[1];
             os << game.factionResult()
                << " "
-               << p0.playerName << " [" << p0.id << "] (" << p0.elo << "/" << p0.deviation << ") vs "
-               << p1.playerName << " [" << p1.id << "] (" << p1.elo << "/" << p1.deviation << ") on "
+               << p0.playerName << " [" << p0.userId<< "] (" << p0.elo << "/" << p0.deviation << ") vs "
+               << p1.playerName << " [" << p1.userId << "] (" << p1.elo << "/" << p1.deviation << ") on "
                << game.mapName() << ": ";
             if (game.isDraw())
             {
@@ -202,11 +201,11 @@ public:
         else if (game._participants.size() == 4)
         {
             const Participant &p0 = game._participants[0];
-            os << p0.playerName << " [" << p0.id << "] (" << p0.elo << "/" << p0.deviation << ") + ";
+            os << p0.playerName << " [" << p0.userId << "] (" << p0.elo << "/" << p0.deviation << ") + ";
             uint32_t mateIndex = game.mateIndex(0);
             // TODO: Check if valid.
             const Participant &p_mate = game._participants[mateIndex];
-            os << p_mate.playerName << " [" << p_mate.id << "] (" << p_mate.elo << "/" << p_mate.deviation << ") vs ";
+            os << p_mate.playerName << " [" << p_mate.userId << "] (" << p_mate.elo << "/" << p_mate.deviation << ") vs ";
             uint32_t firstOpponent;
             for (size_t i = 1; i < game._participants.size(); i++)
             {
@@ -214,7 +213,7 @@ public:
                 {
                     firstOpponent = i;
                     const Participant &o1 = game._participants[firstOpponent];
-                    os << o1.playerName << " [" << o1.id << "] (" << o1.elo << "/" << o1.deviation << ") + ";
+                    os << o1.playerName << " [" << o1.userId << "] (" << o1.elo << "/" << o1.deviation << ") + ";
                     break;
                 }
             }
@@ -222,8 +221,8 @@ public:
             {
                 if (i != mateIndex && i != firstOpponent)
                 {
-                    const Participant &o2 = game._participants[firstOpponent];
-                    os << o2.playerName << " [" << o2.id << "] (" << o2.elo << "/" << o2.deviation << ") on ";
+                    const Participant &o2 = game._participants[i];
+                    os << o2.playerName << " [" << o2.userId << "] (" << o2.elo << "/" << o2.deviation << ") on ";
                     break;
                 }
             }
@@ -261,9 +260,6 @@ private:
 
     //! Did this game end in a disconnect?
     bool _wasDisconnected = false;
-
-    //! Has this game been washed?
-    bool _isWashed = false;
 
     //! A game can also be drawn.
     bool _isDraw = false;

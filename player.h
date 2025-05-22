@@ -1,5 +1,4 @@
  
-
 #pragma once
 
 #include <chrono>
@@ -10,12 +9,13 @@
 #include "blitzmap.h"
 #include "faction.h"
 #include "game.h"
+#include "gamemode.h"
 #include "probabilities.h"
 #include "rating.h"
 
 struct PeakRating
 {
-    std::chrono::year_month_day date;
+    std::chrono::year_month_day date{std::chrono::year{0}, std::chrono::month{2}, std::chrono::day{31}};
     double adjustedElo = -1.0;
     double deviation;
     factions::Faction faction;
@@ -60,11 +60,20 @@ struct LowestRatedDefeats
 // Forward declarations:
 class Players;
 
+/*!
+ * //Username// refers to the account name of the user.
+ * //Alias// is the well-known name of this player. Once it is set, it cannot be changed anymore.
+ * //Name// the name, which is used by the player in the monthly ladder. A player can basically have an
+ *          unlimited number of names.
+ */
 class Player
 {
 public:
     //! Constructor.
-    Player(uint32_t userId = 0xFFFFFFFF);
+    Player(uint32_t userId, const std::string &username, gamemodes::GameMode gameMode = gamemodes::Unknown);
+
+    //! Constructor for illegal player.
+    Player();
 
     //! Destructor.
     ~Player();
@@ -80,24 +89,12 @@ public:
     std::string account() const;
 
     //! Set the players alias (a.k.a tournament name).
-    void setAlias(const std::string &alias, bool confirmed);
+    void setAlias(const std::string &alias);
 
     //! Get the players alias. Either return the raw alias (which might be empty)
     //! if player is not known to the community or return the most often used quick match
     //! name in case there is no alias.
-    std::string alias(bool considerMostOftenUsedQuickMatchName) const;
-
-    //! Add an alternative alias for the player. Needs to be unique over all players.
-    void addAltAlias(const std::string& altAlias);
-
-    //! Get the list of all alias names (including the current one).
-    std::vector<std::string> aliasList() const;
-
-    //! Check if the player is known by the given alias.
-    bool hasAlias(const std::string &alias) const;
-
-    //! Does this player have a tournament name?
-    bool hasConfirmedAlias() const;
+    std::string alias() const;
 
     //! Number of wins.
     uint32_t wins() const;
@@ -108,21 +105,23 @@ public:
     //! Number of draws.
     uint32_t draws() const;
 
+    //! Get the rating for a specific faction.
+    const Rating& rating(factions::Faction faction) const;
+
     //! Set the creation date of this player.
-    void setCreationDate(const std::string &date);
+    void setCreationDate(const std::chrono::year_month_day &date);
 
     //! Get the date of creation of the player account.
-    std::string creationDate() const;
+    std::chrono::year_month_day creationDate() const;
 
-    //! Get the list of quick match names.
-    const std::vector<std::string>& qmNames(gamemodes::GameMode gameMode) const;
+    //! Add a player name used in ladder games.
+    void addName(const std::string &name);
 
-    //! Add a qm name.
-    void addQmName(gamemodes::GameMode gameMode, const std::string &name, bool mightExist);
+    //! Get a list of all player names used in ladder games.
+    const std::set<std::string>& names() const;
 
-    //! Increase the amount the given name has been used in the given game mode
-    //! by 1.
-    void addQmNameUsage(const std::string &name);
+    //! Increase the amount the given name has been used in the given game mode by 1.
+    void increasePlayerNameUsage(const std::string &name);
 
     //! Get the rating of the player.
     double elo(factions::Faction faction) const;
@@ -139,9 +138,7 @@ public:
     //! Decay the ratings for all factions.
     void decay();
 
-    //!
-    const Rating& rating(factions::Faction faction) const { return _ratings[faction]; }
-
+    //! Apply all pending games.
     void apply(std::chrono::year_month_day date, bool decay);
 
     //! Update a players rating.
@@ -194,8 +191,8 @@ public:
     //! Get the number of games played with the given faction.
     uint32_t gameCount(factions::Faction faction) const;
 
-    //! Get the most often used quick match name..
-    std::string qmName() const;
+    //! Get the most often used player name in quick match.
+    std::string mostOftenUsedPlayerName() const;
 
     //! Get the peak rating for a specific faction.
     PeakRating peakRating(factions::Faction faction) const;
@@ -204,10 +201,10 @@ public:
     PeakRating peakRating() const;
 
     //! Date of the first game.
-    std::string firstGame() const;
+    std::chrono::year_month_day firstGame() const;
 
     //! Date of the last game.
-    std::string lastGame() const;
+    std::chrono::year_month_day lastGame() const;
 
     //! The number of overall days this player has been active.
     int daysActive() const;
@@ -225,7 +222,7 @@ public:
     const std::map<uint32_t, Probabilities>& vsOtherPlayers() const;
 
     //! Get the probabilities for a specific map.
-    const Probabilities& mapStats(gamesetup::Setup setup, int mapIndex) const;
+    const Probabilities& mapStats(factions::Setup setup, int mapIndex) const;
 
     //! Get historical elo values for the given faction.
     std::map<std::chrono::year_month_day, std::pair<double, double>> historicalElo(factions::Faction faction) const;
@@ -253,16 +250,6 @@ private:
     //! can also a name, which was manually set.
     std::string _alias;
 
-    //! Alternate alias names. If the alias changes, tournament games might contain invalid
-    //! names. That's why we need to keep a list of alias.
-    std::vector<std::string> _altAliasList;
-
-    //! Is this a confirmed alias (a.k.a tournament name)?
-    bool _confirmedAlias = false;
-
-    //! Did we manually assign a name?
-    bool _manuallyAssignedAlias = false;
-
     //! Initial rating. Not present if player has never been active.
     std::optional<double> _initialRating = {};
 
@@ -271,9 +258,6 @@ private:
 
     //! The date this account has been created.
     std::chrono::year_month_day _created;
-
-    //! List of all quick match names and their corresponding user id.
-    std::vector<std::string> _qmNames[gamemodes::count()];
 
     //! Quick match names, which are actually used along with the amount of times.
     std::map<std::string, uint32_t> _usedQmNames;
@@ -329,11 +313,14 @@ private:
     //! List of lowest rated victories. Stripped down to 20 elements max.
     std::set<LowestRatedDefeats> _lowestRatedDefeats;
 
-    //! Statistic against each other player.
+    //! Statistics against each other player. Contains the expected and the actual result.
     std::map<uint32_t, Probabilities> _vsPlayer;
 
     //! Map statistics for each faction setup.
-    std::array<std::array<Probabilities, blitzmap::count()>, gamesetup::Unknown> _mapStats;
+    std::array<std::array<Probabilities, blitzmap::count()>, factions::UnknownSetup> _mapStats;
+
+   //! List of player names.
+    std::set<std::string> _names;
 
 }; // class Player
 

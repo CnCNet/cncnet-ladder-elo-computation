@@ -9,10 +9,7 @@
 #include "rating.h"
 #include "faction.h"
 #include "game.h"
-//#include "players.h"
-//#include "map.h"
 #include "probabilities.h"
-//#include "gamesetup.h"
 
 struct MapPlayed
 {
@@ -33,7 +30,7 @@ struct Upset
     double eloDifference;
     uint32_t duration = 0;
 
-    // Wanna have the biggest difference on top.
+    // Need the biggest difference on top.
     bool operator<(const Upset &other) const { return eloDifference > other.eloDifference; }
 };
 
@@ -41,35 +38,38 @@ class MapStats
 {
 public:
     //! Constructor.
-    MapStats();
+    MapStats(gamemodes::GameMode gameMode);
 
     //! Destructor.
     ~MapStats() = default;
 
     //! Finalize map statistics.
-    void finalize(const Players &players);
+    void finalize(const std::filesystem::path &directory, const Players &players);
 
     //! Add a game to the stats.
     void processGame(const Game &game, const Players &players);
 
     //! Export alltime, yearly and monthly upsets.
-    void exportUpsets(const Players &players);
+    void exportUpsets(const std::filesystem::path &directory, const Players &players);
 
     //! Export the longest games.
-    void exportLongestGames(const Players &player);
+    void exportLongestGames(const std::filesystem::path &directory, const Players &player);
 
     //! Export the maps played for each month.
-    void exportMapsPlayed();
+    void exportMapsPlayed(const std::filesystem::path &directory);
 
 private:
     //! Export the given list of upsets.
-    void exportUpsets(const std::multiset<Upset> &upsets, const std::string &filename, const std::string &description, const Players &players) const;
+    void exportUpsets(const std::filesystem::path &directory, const std::multiset<Upset> &upsets, const std::string &filename, const std::string &description, const Players &players) const;
+
+    //! Game mode used.
+    gamemodes::GameMode _gameMode;
 
     //! Number of games passed to this class.
-    int gameCount = 0;
+    int _gameCount = 0;
 
     //! Overall map statistics each map.
-    std::map<std::string, Probabilities> _mapStats[gamesetup::Unknown];
+    std::map<std::string, Probabilities> _mapStats[factions::UnknownSetup];
 
     //! Number of games for each player on each for each month.
     //! Key of second map is the normalized map name.

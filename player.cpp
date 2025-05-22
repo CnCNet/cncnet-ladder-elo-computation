@@ -1,16 +1,13 @@
  
-
-// C++ includes:
 #include <cmath>
 #include <set>
 
-// Local includes:
-#include "player.h"
-//#include "database.h"
-//#include "gameresult.h"
-//#include "global.h"
+#include "faction.h"
 #include "knownplayers.h"
 #include "logging.h"
+#include "player.h"
+#include "players.h"
+#include "stringtools.h"
 
 // TODO:
 // - Best day
@@ -18,22 +15,27 @@
 
 /*!
  */
-Player::Player(uint32_t userId) :
-    _userId(userId)
+Player::Player() :
+    _userId(0)
 {
-    // Assigned some starting values to a couple of players. These values WILL NOT
-    // change the final result in terms of gaps, but just adjust the rating of
-    // everyone. If changes to the elo systems are made, we want players to keep
-    // their rating, because it might look strange if the rating changes without
-    // having played. Several changes have been made over time and these values
-    // will just keep the ratings stable.
+
+}
+
+
+/*!
+ */
+Player::Player(uint32_t userId, const std::string &username, gamemodes::GameMode gameMode) :
+    _userId(userId),
+    _account(username)
+{
+
 
     if (userId == 0)
     {
         Log::warning() << "Player with user id 0 is not supposed to exist.";
     }
 
-    std::pair<double, double> initialValues = initialRatingAndDeviation(userId);
+    std::pair<double, double> initialValues = players::initialRatingAndDeviation(userId, gameMode);
 
     // Init ratings.
     for (size_t i = 0; i < _ratings.size(); i++)
@@ -44,7 +46,8 @@ Player::Player(uint32_t userId) :
     // Init peak ratings.
     for (size_t i = 0; i < _peakRatings.size(); i++)
     {
-        _peakRatings[i] = { QDateTime::fromMSecsSinceEpoch(0).toLocalTime().date(), -1.0, -1.0, static_cast<factions::Faction>(i) };
+        static_assert(!std::chrono::year_month_day{std::chrono::year{0}, std::chrono::month{2}, std::chrono::day{31}}.ok());
+        _peakRatings[i] = { {std::chrono::year{0}, std::chrono::month{2}, std::chrono::day{31}}, -1.0, -1.0, static_cast<factions::Faction>(i) };
     }
 }
 
@@ -84,80 +87,48 @@ std::string Player::account() const
 
 /*!
  */
-void Player::setAlias(const std::string &alias, bool confirmed)
+void Player::setAlias(const std::string &alias)
 {
     if (alias != "[]")
     {
         _alias = alias;
-        _confirmedAlias = confirmed;
         Log::info() << "Alias for " << userId() << " is " << _alias;
-        if (!confirmed)
-        {
-            _manuallyAssignedAlias = true;
-        }
     }
     else
     {
-        Log::warning() << "Rejecting bad alias '" << alias << "' for " << _account << " (" << _userId << ").";
+        Log::error() << "Rejecting bad alias '" << alias << "' for " << _account << " (" << _userId << ").";
     }
 }
 
 /*!
  */
-QString Player::alias(bool considerMostOftenUsedQuickMatchName) const
+
+std::string Player::alias() const
 {
-    if ((!considerMostOftenUsedQuickMatchName || _manuallyAssignedAlias || _confirmedAlias) && !_alias.isEmpty())
+    if (!_alias.empty())
     {
         return _alias;
     }
-    else
-    {
-        if (_usedQmNames.isEmpty())
-        {
-            Log::warning() << "Asking for alias without having any qm names yet for player '" << this->account() << "'.";
-        }
-        return "[" + qmName() + "]";
-    }
-}
 
-/*!
- */
-std::vector<std::string> Player::aliasList() const
-{
-    std::vector<std::string> result = _altAliasList;
-
-    if (_confirmedAlias || _manuallyAssignedAlias)
+    if (_usedQmNames.empty())
     {
-        result.push_back(_alias);
+        Log::warning() << "Asking for alias without having any player names yet for player '" << this->account() << "'.";
+        return "???";
     }
 
-    return result;
+    return "[" + mostOftenUsedPlayerName() + "]";
 }
 
 /*!
  */
-void Player::addAltAlias(const std::string &altAlias)
-{
-    _altAliasList.push_back(altAlias);
-}
-
-/*!
- */
-bool Player::hasAlias(const std::string &alias) const
-{
-    return _altAliasList.contains(alias) || (_alias == alias);
-}
-
-/*!
- */
-void Player::setCreationDate(const std::string &date)
+void Player::setCreationDate(const std::chrono::year_month_day &date)
 {
     _created = date;
 }
 
 /*!
  */
-std::string Player::creationDate() const
+std::chrono::year_month_day Player::creationDate() const
 {
     return _created;
 }
@@ -247,6 +218,10 @@ factions::Faction Player::getBestActiveFaction() const
  */
 int Player::daysActive(bool sinceFirstActivation) const
 {
+    auto today = floor<std::chrono::days>(std::chrono::system_clock::now());
+    std::chrono::year_month_day currentDate = std::chrono::year_month_day{today};
+    std::chrono::sys_days currentDays = currentDate;
+
     if ((_statusList.size() % 2) == 0)
     {
         return -1;
@@ -254,11 +229,15 @@ int Player::daysActive(bool sinceFirstActivation) const
 
     if (sinceFirstActivation)
     {
-        return _statusList.first().daysTo(QDate::currentDate());
+        std::chrono::sys_days days = _statusList.front();
+        std::chrono::days diff = currentDays - days;
+        return diff.count();
     }
     else
     {
-        return _statusList.last().daysTo(QDate::currentDate());
+        std::chrono::sys_days days = _statusList.back();
+        std::chrono::days diff = currentDays - days;
+        return diff.count();
     }
 }
 
@@ -276,20 +255,20 @@ bool Player::wasActive(factions::Faction faction) const
     // Because entries are alternatining dates when players goes active/inactive,
     // the faction status list just needs to contain an odd number in order
     // for the faction to be active.
-    return !_factionStatusList[faction].isEmpty();
+    return !_factionStatusList[faction].empty();
 }
 
 /*!
  */
 bool Player::wasActiveBefore(const std::chrono::year_month_day &date, factions::Faction faction) const
 {
-    if (_factionStatusList[faction].isEmpty())
+    if (_factionStatusList[faction].empty())
     {
         return false;
     }
     else
     {
-        return _factionStatusList[faction].first() < date;
+        return _factionStatusList[faction].front() < date;
     }
 }
 
@@ -324,21 +303,21 @@ Rating::CalculationType Player::update()
     {
         // Let's create some stats.
         if (i != factions::Combined)
+        {
             for (size_t j = 0; j < _pendingGames[i].size(); j++)
             {
                 gameCount++;
                 opponentElo += glicko::scaleFactor * std::get<glicko::Rating>(_pendingGames[i][j]) + glicko::initialRating;
                 result += _pendingResults[i][j];
             }
-
-        _ratings[i]._isSilent = true;
+        }
 
         if (!_pendingGames[i].empty())
         {
             Rating::CalculationType currentCalculationType = _ratings[i].currentCalculationType();
-            if (currentCalculationType == Rating::CalculationType::Initial && !_ratings[i]._isSilent)
+            if (currentCalculationType == Rating::CalculationType::Initial)
             {
-                Log::info() << "Trying to find initial rating for player " << this->alias(true) << " and faction " << factions::name(factions::toFaction(i)) << ".";
+                Log::info() << "Trying to find initial rating for player " << this->alias() << " and faction " << factions::name(factions::toFaction(i)) << ".";
                 if (_ratings[i].hasWinsAndLossesInResults(_pendingResults[i]))
                 {
                     Log::info() << "Player has wins and losses. Using the best starting value of regular and custom calculation.";
@@ -348,24 +327,21 @@ Rating::CalculationType Player::update()
                     Log::info() << "Player has probably losses only. Using single game calculation.";
                 }
             }
-            else if (currentCalculationType == Rating::CalculationType::SingleStep && !_ratings[i]._isSilent)
+            else if (currentCalculationType == Rating::CalculationType::SingleStep)
             {
-                Log::info() << "Player " << this->alias(true) << " and faction " << factions::name(factions::toFaction(i)) << " still use single step calculation.";
+                Log::info() << "Player " << this->alias() << " and faction " << factions::name(factions::toFaction(i)) << " still use single step calculation.";
             }
 
             calculationType = _ratings[i].update(_pendingGames[i], _pendingResults[i]);
 
             if (currentCalculationType == Rating::CalculationType::Initial || currentCalculationType == Rating::CalculationType::SingleStep)
             {
-                if (!_ratings[i]._isSilent)
-                {
-                    Log::info() << "Applied improved initial elo calculation to player " << this->alias(true) << ".";
-                }
+                Log::info() << "Applied improved initial elo calculation to player " << this->alias() << ".";
             }
 
             if (currentCalculationType != Rating::CalculationType::Normal && _ratings[i].currentCalculationType() == Rating::CalculationType::Normal)
             {
-                Log::info() << "Initial rating for player " << this->alias(true) << " and faction " << factions::name(factions::toFaction(i)) << " is [" << _ratings[i].pendingElo() << ", " << _ratings[i].deviation() << "].";
+                Log::info() << "Initial rating for player " << this->alias() << " and faction " << factions::name(factions::toFaction(i)) << " is [" << _ratings[i].pendingElo() << ", " << _ratings[i].deviation() << "].";
             }
             _updated[i] = true;
         }
@@ -414,16 +390,6 @@ void Player::apply(std::chrono::year_month_day date, bool decay)
         double ll = 65.0;
         double uu = 85.0;
 
-        gamemodes::GameMode gameMode = Database::instance().gameMode();
-        if (gameMode == gamemodes::YurisRevenge)
-        {
-            lowerLimit = deviation(faction) - std::sqrt(std::abs(glicko::initialRating - maxElo)); // = deviation(faction);
-            upperLimit = deviation(faction) - std::sqrt(std::abs(glicko::initialRating - elo(faction))); //deviation(faction);
-            ll = 65.0; //75.0;
-            uu = 85.0; //95.0;
-        }
-
-
         if (lowerLimit < ll && !isActive(faction))
         {
             if (!isActive())
@@ -439,12 +405,12 @@ void Player::apply(std::chrono::year_month_day date, bool decay)
 
             // Congratulations! This faction has just gone active.
             _factionStatusList[i].push_back(date);
-            Log::debug() << date.toString() << " => " << alias(true)<< " goes active after " << _gameCount[i] << " games for faction '" << factions::name(faction) << "'.";
+            Log::debug() << date << " => " << alias()<< " goes active after " << _gameCount[i] << " games for faction '" << factions::name(faction) << "'.";
         }
         else if (upperLimit > uu && isActive(faction))
         {
             // Too bad... going inactive.
-            Log::debug() << date.toString() << " => " << alias(true) << " goes inactive for faction '" << factions::name(faction) << "'.";
+            Log::debug() << date << " => " << alias() << " goes inactive for faction '" << factions::name(faction) << "'.";
 
             // Going full inactive.
             _factionStatusList[i].push_back(date);
@@ -489,7 +455,7 @@ int Player::daysActive() const
 {
     int result = 0;
 
-    for (auto it = _eloByDate.keyValueBegin(); it != _eloByDate.keyValueEnd(); ++it)
+    for (auto it = _eloByDate.begin(); it != _eloByDate.end(); ++it)
     {
         const std::array<std::pair<double, double>, factions::count()> &eloByDate = it->second;
         for (size_t i = 0; i < eloByDate.size(); i++)
@@ -509,14 +475,26 @@ int Player::daysActive() const
  */
 int Player::daysFromLastGame() const
 {
-    return _lastGame.daysTo(QDate::currentDate());
+    auto today = floor<std::chrono::days>(std::chrono::system_clock::now());
+    std::chrono::year_month_day currentDate = std::chrono::year_month_day{today};
+    std::chrono::sys_days currentDays = currentDate;
+
+    std::chrono::sys_days days = _lastGame;
+    std::chrono::days diff = currentDays - days;
+    return diff.count();
 }
 
 /*!
  */
 int Player::daysFromFirstGame() const
 {
-    return _firstGame.daysTo(QDate::currentDate());
+    auto today = floor<std::chrono::days>(std::chrono::system_clock::now());
+    std::chrono::year_month_day currentDate = std::chrono::year_month_day{today};
+    std::chrono::sys_days currentDays = currentDate;
+
+    std::chrono::sys_days days = _firstGame;
+    std::chrono::days diff = currentDays - days;
+    return diff.count();
 }
 
 /*!
@@ -553,7 +531,7 @@ int Player::daysInactive() const
 {
     int result = 0;
 
-    for (auto it = _eloByDate.keyValueBegin(); it != _eloByDate.keyValueEnd(); ++it)
+    for (auto it = _eloByDate.begin(); it != _eloByDate.end(); ++it)
     {
         const std::array<std::pair<double, double>, factions::count()> &eloByDate = it->second;
         bool foundActivity = false;
@@ -586,9 +564,21 @@ void Player::processGame(const Game& game, int index, bool instantProcessing, co
     uint32_t opponent;
     double result;
 
+    if (_userId == 0)
+    {
+        throw std::runtime_error("Processing game for uninitialized player with userId 0.");
+    }
+
+    if (faction >= factions::UnknownFaction)
+    {
+        std::stringstream ss;
+        ss << "Unknown faction " << static_cast<int>(faction) << " for player " << _userId << " in game " << game.id() << ".";
+        throw std::runtime_error(ss.str());
+    }
+
     if (game.gameType() == gametypes::Quickmatch)
     {
-        addQmNameUsage(game.playerName(index));
+        increasePlayerNameUsage(game.playerName(index));
     }
 
     int playerIndex = game.playerIndex(_userId);
@@ -603,7 +593,7 @@ void Player::processGame(const Game& game, int index, bool instantProcessing, co
     else if (playerIndex != index)
     {
         std::stringstream ss;
-        ss << "Player with index " << index << " in game " << game.id() << " is " << game.player(index) << ", but expected was "
+        ss << "Player with index " << index << " in game " << game.id() << " is " << game.userId(index) << ", but expected was "
            << _userId << ". Skipped this game for player " << _userId << ".";
         throw std::runtime_error(ss.str());
     }
@@ -626,7 +616,7 @@ void Player::processGame(const Game& game, int index, bool instantProcessing, co
 
     if (game.playerCount() == 2)
     {
-        opponent = game.player(index ^ 1);
+        opponent = game.userId(index ^ 1);
         opponentFaction = game.faction(index ^ 1);
 
         if (!players.contains(opponent))
@@ -658,52 +648,34 @@ void Player::processGame(const Game& game, int index, bool instantProcessing, co
     }
     else
     {
-        double myElo = players[game.playerId(playerIndex)].rating(faction).elo();
+        // ELO for 2v2 games.
+        double myElo = players[game.userId(playerIndex)].rating(faction).elo();
         uint32_t mateIndex = game.mateIndex(playerIndex);
-        double matesElo = players[game.playerId(mateIndex)].rating(game.faction(mateIndex)).elo();
-        double matesDeviation = players[game.playerId(mateIndex)].rating(game.faction(mateIndex)).eloDeviation();
+        double mateElo = players[game.userId(mateIndex)].rating(game.faction(mateIndex)).elo();
+        double mateDeviation = players[game.userId(mateIndex)].rating(game.faction(mateIndex)).eloDeviation();
 
-        //double myShare = myElo / (myElo + matesElo);
-        double myShare = std::log(myElo) / (std::log(myElo) + std::log(matesElo));
+        double myShare = std::log(myElo) / (std::log(myElo) + std::log(mateElo));
 
         if (!game.hasWon(playerIndex))
         {
             myShare = 1.0 - myShare;
         }
 
-        double rating_diff = std::abs(myElo - matesElo);
+        double rating_diff = std::abs(myElo - mateElo);
         double scalingMyTeam = 1.0 + (rating_diff / 500.0);
 
-        std::pair<uint32_t, uint32_t> opponents = game.opponentsIndex(playerIndex);
-        double opponent1Elo = players[game.player(opponents.first)].rating(game.faction(opponents.first)).elo();
-        double opponent2Elo = players[game.player(opponents.second)].rating(game.faction(opponents.second)).elo();
-        double opponent1Deviation = players[game.player(opponents.first)].rating(game.faction(opponents.first)).eloDeviation();
-        double opponent2Deviation = players[game.player(opponents.second)].rating(game.faction(opponents.second)).eloDeviation();
-
-        //std::cout << "Opponents elo: " << opponent1Elo << " " << opponent2Elo << std::endl;
+        std::pair<uint32_t, uint32_t> opponents = game.opponentsIndices(playerIndex);
+        double opponent1Elo = players[game.userId(opponents.first)].rating(game.faction(opponents.first)).elo();
+        double opponent2Elo = players[game.userId(opponents.second)].rating(game.faction(opponents.second)).elo();
+        double opponent1Deviation = players[game.userId(opponents.first)].rating(game.faction(opponents.first)).eloDeviation();
+        double opponent2Deviation = players[game.userId(opponents.second)].rating(game.faction(opponents.second)).eloDeviation();
 
         double finalElo = (opponent1Elo + opponent2Elo) * myShare;
-        double finalDeviation = (opponent1Deviation + opponent2Deviation + matesDeviation) / 3.0 * scalingMyTeam;
+        double finalDeviation = (opponent1Deviation + opponent2Deviation + mateDeviation) / 3.0 * scalingMyTeam;
 
         std::array<double, 3> opponent{((finalElo - glicko::initialRating) / glicko::scaleFactor ),
                                        (finalDeviation / glicko::scaleFactor),
                                        glicko::initialVolatility};
-        //std::cout << myShare << " Opponent: [" << finalElo << ", " << finalDeviation << "]" << std::endl;
-
-        double diffx = myElo + matesElo - opponent1Elo - opponent2Elo;
-        static int wins = 0;
-        static int losses = 0;
-        static double diffsum = 0;
-        if (_userId == 3118 && myElo - 300 > matesElo && finalDeviation < 80.0 && diffx > 0)
-        {
-            diffsum += diffx;
-            if (result > 0.5)
-                wins++;
-            else
-                losses++;
-            std::cout << game << std::endl;
-            std::cout << wins << ":" << losses << " (" << (diffsum / (wins + losses)) << ") = " << ((double)wins / ((double)wins + (double)losses)) << "%" << std::endl;
-        }
 
         if (instantProcessing)
         {
@@ -720,157 +692,6 @@ void Player::processGame(const Game& game, int index, bool instantProcessing, co
             _pendingGames[factions::Combined].push_back(opponent);
             _pendingResults[factions::Combined].push_back(result);
         }
-
-        /* OLD COMPUTE
-        static int won = 0;
-        static int loss = 0;
-
-        double scalingMyTeam = 1.0;
-        double scalingOtherTeam = 1.0;
-
-        double myElo = players[game.player(playerIndex)].rating(faction).elo();
-        uint32_t mateIndex = game.mateIndex(playerIndex);
-        double matesElo = players[game.player(mateIndex)].rating(game.faction(mateIndex)).elo();
-        double otherDeviation = players[game.player(mateIndex)].rating(game.faction(mateIndex)).eloDeviation();
-
-        if (!game.hasWon(playerIndex) && myElo > matesElo)
-        {
-            double rating_diff = std::abs(myElo - matesElo);
-            scalingMyTeam += (rating_diff / 250.0);
-        }
-
-        //double deviationPenalty = scaling * players[game.player(mateIndex)].rating(game.faction(mateIndex)).eloDeviation();
-
-        std::pair<uint32_t, uint32_t> opponents = game.opponentsIndex(playerIndex);
-        double opponent1Elo = players[game.player(opponents.first)].rating(game.faction(opponents.first)).elo();
-        double opponent2Elo = players[game.player(opponents.second)].rating(game.faction(opponents.second)).elo();
-        double ratingDiffOpponents = std::abs(opponent1Elo - opponent2Elo);
-
-        if (!game.hasWon(playerIndex) && myElo > matesElo)
-        {
-            scalingOtherTeam += (ratingDiffOpponents / 500.0);
-        }
-
-        //if (deviationPenalty > 2.0)
-        std::cout << game.playerName(index).toStdString() << " SCALE " << (scalingMyTeam * scalingOtherTeam) << " in " << game << std::endl;
-
-        //std::cout << alias(true).toStdString() << "[" << _ratings[factions::Combined].elo() << ", " << _ratings[factions::Combined].deviation() << "]" << std::endl;
-
-        for (uint32_t i = 0; i < game.playerCount(); i++)
-        {
-            if (game.hasWon(playerIndex) != game.hasWon(i))
-            {
-                // This is an opponent.
-                opponent = game.player(i);
-                opponentFaction = game.faction(i);
-
-                if (!players.contains(opponent))
-                {
-                    std::stringstream ss;
-                    ss << "Unable to find opponent " << opponent << " while processing game.";
-                    throw std::runtime_error(ss.str());
-                }
-
-                std::array<double, 3> rating = players[opponent].rating(opponentFaction).toArray();
-                double dev = rating[1] * glicko::scaleFactor;
-                std::cout << "Old deviation: " << dev << std::endl;
-                if (!game.hasWon(playerIndex))
-                    dev = std::sqrt(((dev * dev) + (otherDeviation * otherDeviation)) * 0.5);
-                dev = dev * scalingMyTeam * scalingOtherTeam;
-                dev = std::min(350.0, dev);
-                rating[1] = dev / glicko::scaleFactor;
-                std::cout << "New deviation: " << rating[1] * glicko::scaleFactor << std::endl;
-
-                if (instantProcessing)
-                {
-                    _ratings[faction].update({ rating }, { result });
-                    _updated[faction] = true;
-                    _ratings[factions::Combined].update({ rating }, { result });
-                    _updated[factions::Combined] = true;
-                }
-                else
-                {
-                    _pendingGames[faction].push_back(rating);
-                    _pendingResults[faction].push_back(result);
-
-                    _pendingGames[factions::Combined].push_back(rating);
-                    _pendingResults[factions::Combined].push_back(result);
-                }
-            }
-        }*/
-
-        //_ratings[faction].apply();
-        //_ratings[factions::Combined].apply();
-        //std::cout << alias(true).toStdString() << "[" << _ratings[factions::Combined].elo() << ", " << _ratings[factions::Combined].deviation() << "]" << std::endl;
-
-        /*std::vector<std::array<double, 3>> opponentRatings;
-
-        for (uint32_t i = 0; i < game.playerCount(); i++)
-        {
-            if (game.hasWon(playerIndex) != game.hasWon(i))
-            {
-                opponentRatings.push_back(players[game.player(i)].rating(game.faction(i)).toArray());
-            }
-        }
-
-        double opponentAverageRating = 0.0;
-        double opponentRDsum = 0.0;
-
-        for (const auto& r : opponentRatings)
-        {
-            opponentAverageRating += r[0];
-            opponentRDsum += r[1] * r[1];
-        }
-        opponentAverageRating /= opponentRatings.size();
-        double opponentCombinedRD = std::sqrt(opponentRDsum / opponentRatings.size());
-
-        std::vector<std::array<double, 3>> ownTeamRatings;
-
-        for (uint32_t i = 0; i < game.playerCount(); i++)
-        {
-            if (i != playerIndex && (game.hasWon(playerIndex) == game.hasWon(i)))
-            {
-                ownTeamRatings.push_back(players[game.player(i)].rating(game.faction(i)).toArray());
-            }
-        }
-
-        double ownTeammateRating = 0.0;
-        double ownTeammateRD = 0.0;
-
-        if (!ownTeamRatings.empty())
-        {
-            ownTeammateRating = ownTeamRatings[0][0];
-            ownTeammateRD = ownTeamRatings[0][1];
-        }
-
-        double ownShare = _ratings[faction].toArray().at(0) / (_ratings[faction].toArray().at(0) + ownTeammateRating);
-
-        std::cout << "OWN: [" << ownTeammateRating << ", " << ownTeammateRD << "] ";
-        std::cout << " VS: [" << opponentAverageRating << ", " << opponentCombinedRD << "]" << std::endl;
-
-        Rating ownRating(ownTeammateRating, ownTeammateRD, glicko::initialVolatility, true);
-        Rating otherRating(opponentAverageRating, opponentCombinedRD, glicko::initialVolatility, true);
-
-        double expectedScore = ownRating.e_star(otherRating.toArray(), 0.0);
-
-        double adjustedScore = std::min(1.0, ownShare / expectedScore);
-        std::cout << "SCORE " << adjustedScore << " for " << game.playerName(playerIndex).toStdString() << " (expected " << expectedScore << ") => " << game << std::endl;
-
-        if (!game.hasWon(playerIndex))
-        {
-            adjustedScore = 0.0; //1.0 - std::min(1.0, ownShare / (1.0 - expectedScore));
-        }
-
-        if (instantProcessing)
-        {
-            _ratings[faction].update({ { opponentAverageRating, opponentCombinedRD, glicko::initialVolatility } }, { adjustedScore });
-            _updated[faction] = true;
-        }
-        else
-        {
-            _pendingGames[faction].push_back({ opponentAverageRating, opponentCombinedRD, glicko::initialVolatility });
-            _pendingResults[faction].push_back(adjustedScore);
-        }*/
     }
 
     _gameCount[faction]++;
@@ -879,7 +700,7 @@ void Player::processGame(const Game& game, int index, bool instantProcessing, co
     // Remember when the last game was played.
     _lastGame = game.date();
 
-    if (!_firstGame.isValid())
+    if (!_firstGame.ok())
     {
         _firstGame = game.date();
     }
@@ -894,6 +715,7 @@ void Player::processGame(const Game& game, int index, bool instantProcessing, co
             _hightestRatedVictories.erase(_hightestRatedVictories.begin());
         }
     }
+
 
     // Does this game count for lowest rated defeats? 2v2 games are not taken into account.
     if (game.playerCount() == 2 && game.winnerIndex() == (index ^ 1) && game.deviation(index) < 200.0 && players[opponent].wasActive() && game.isUnderdogWin())
@@ -910,17 +732,17 @@ void Player::processGame(const Game& game, int index, bool instantProcessing, co
     {
         // Update player vs player stats and maps stats. Only applies to games
         // with 2 players.
-        Probabilities &probs = _vsPlayer[game.player(index ^ 1)];
+        Probabilities &probs = _vsPlayer[game.userId(index ^ 1)];
         Rating myRating(game.rating(index), game.deviation(index), glicko::initialVolatility);
         Rating otherRating(game.rating(index ^ 1), game.deviation(index ^ 1), glicko::initialVolatility);
         double expectedWinningPercentage = myRating.e_star(otherRating.toArray(), 0.0);
         probs.addGame(expectedWinningPercentage, (game.winnerIndex() == index));
 
-        // Map statistics.
-        int mapIndex = map::toIndex(game.mapName());
+        // Map statistics (currently only for blitz).
+        int mapIndex = blitzmap::toIndex(game.mapName());
         if (mapIndex >= 0)
         {
-            gamesetup::Setup setup = gamesetup::fromFactions(game.faction(index), game.faction(index ^ 1));
+            factions::Setup setup = factions::fromFactions(game.faction(index), game.faction(index ^ 1));
             Probabilities &probs = _mapStats[setup][mapIndex];
             double expectedWinRate = myRating.e_star(otherRating.toArray(), 0.0);
             probs.addGame(expectedWinRate, game.winnerIndex() == index);
@@ -930,41 +752,21 @@ void Player::processGame(const Game& game, int index, bool instantProcessing, co
 
 /*!
  */
-bool Player::hasConfirmedAlias() const
+void Player::addName(const std::string &name)
 {
-    return _confirmedAlias;
-}
-
-/*!
- */
-const std::vector<std::string> &Player::qmNames(gamemodes::GameMode gameMode) const
-{
-    return _qmNames[gameMode];
-}
-
-/*!
- */
-void Player::addQmName(gamemodes::GameMode gameMode, const std::string &name, bool mightExist)
-{
-    if (gameMode == gamemodes::Unknown)
+    if (_names.contains(name))
     {
-        Log::error() << "Cannot add quick match name to unknown game mode.";
-        return;
+        Log::warning() << "Name '" << name << "' already exists for user " << _userId << ".";
     }
-
-    if (!_qmNames[gameMode].contains(name))
+    else
     {
-        _qmNames[gameMode].push_back(name);
-    }
-    else if (!mightExist)
-    {
-        Log::warning() << "Quickmatch name '" << name << "' already exists for user " << _userId << ".";
+        _names.insert(name);
     }
 }
 
 /*!
  */
-void Player::addQmNameUsage(const std::string &name)
+void Player::increasePlayerNameUsage(const std::string &name)
 {
     if (!_usedQmNames.contains(name))
     {
@@ -1005,17 +807,17 @@ uint32_t Player::gameCount(factions::Faction faction) const
 
 /*!
  */
-std::string Player::qmName() const
+std::string Player::mostOftenUsedPlayerName() const
 {
     std::string qmName;
     uint32_t appearances = 0;
 
     for (std::map<std::string, uint32_t>::const_iterator it = _usedQmNames.begin(); it != _usedQmNames.end(); ++it)
     {
-        if (it.value() > appearances)
+        if (it->second > appearances)
         {
-            qmName = it.key();
-            appearances = it.value();
+            qmName = it->first;
+            appearances = it->second;
         }
     }
 
@@ -1088,9 +890,9 @@ void Player::finalize()
         }
     }
 
-    for (size_t i = 0; i < gamesetup::Unknown; i++)
+    for (size_t i = 0; i < factions::UnknownSetup; i++)
     {
-        for (int j = 0; j < map::count(); j++)
+        for (int j = 0; j < blitzmap::count(); j++)
         {
             Probabilities &probs = _mapStats[i][j];
             probs.finalize();
@@ -1107,7 +909,7 @@ const std::map<uint32_t, Probabilities>& Player::vsOtherPlayers() const
 
 /*!
  */
-const Probabilities& Player::mapStats(gamesetup::Setup setup, int mapIndex) const
+const Probabilities& Player::mapStats(factions::Setup setup, int mapIndex) const
 {
     if (static_cast<size_t>(setup) >= _mapStats.size() || mapIndex < 0 || static_cast<size_t>(mapIndex) >= _mapStats[setup].size())
     {
@@ -1123,7 +925,7 @@ std::map<std::chrono::year_month_day, std::pair<double, double>> Player::histori
 {
     std::map<std::chrono::year_month_day, std::pair<double, double>> result;
 
-    for (auto it = _eloByDate.keyValueBegin(); it != _eloByDate.keyValueEnd(); ++it)
+    for (auto it = _eloByDate.begin(); it != _eloByDate.end(); ++it)
     {
         const std::chrono::year_month_day &date = it->first;
         const std::array<std::pair<double, double>, factions::count()> &ratingAndDeviation = it->second;
@@ -1140,25 +942,25 @@ std::map<std::chrono::year_month_day, std::pair<double, double>> Player::histori
  */
 bool Player::lowerLexicalOrder(const Player &other) const
 {
-    std::string me = this->alias(true);
-    std::string him = other.alias(true);
+    std::string me = this->alias();
+    std::string him = other.alias();
 
-    if (me.isEmpty() && him.isEmpty())
+    if (me.empty() && him.empty())
         return false;
 
-    if (me.isEmpty())
+    if (me.empty())
         return true;
 
-    if (him.isEmpty())
+    if (him.empty())
         return false;
 
-    while (me[0] == "[")
-        me.remove(0, 1);
+    while (me[0] == '[')
+        me.erase(0, 1);
 
-    while (him[0] == "[")
-        him.remove(0, 1);
+    while (him[0] == '[')
+        him.erase(0, 1);
 
-    return me.toLower() < him.toLower();
+    return stringtools::toLower(me) < stringtools::toLower(him);
 }
 
 /*!
@@ -1180,5 +982,19 @@ uint32_t Player::losses() const
 uint32_t Player::draws() const
 {
     return _draws;
+}
+
+/*!
+ */
+const Rating& Player::rating(factions::Faction faction) const
+{
+    return _ratings[faction];
+}
+
+/*!
+ */
+const std::set<std::string>& Player::names() const
+{
+    return _names;
 }
 

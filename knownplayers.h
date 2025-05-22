@@ -2,26 +2,21 @@
 #pragma once
 
 #include <cstdint>
+#include <utility>
+
+#include "gamemode.h"
 
 // A couple of active players used for testing purposes.
 enum class KnownPlayers : uint32_t
 {
-    Marsh = 6,
-    Zedd = 13,
     Luke = 152,
-    Ludo = 153,
-    Burg = 332,
     Marko = 928,
     Edd = 2152,
     Latof = 3118,
-    Andy = 6026,
-    Muri = 7922,
     Lloyd = 17221,
     Qien = 17651,
     Mueller = 24830,
     Snark = 36141,
-    Kain = 39603,
-    Ossama = 41776,
     Diego = 42083,
     Root = 48373,
     Ardee = 51203,
@@ -42,20 +37,10 @@ enum class CriticalPlayers : uint32_t
     GemZKing = 70820,
 };
 
-// Some pro players for extended stats.
-enum class ProPlayers : uint32_t
-{
-    Luke = 152,
-    Marko = 928,
-    Latof = 3118,
-    Qien = 17651,
-    Root = 48373,
-    Kwos = 54423
-};
-
 namespace players
 {
 
 extern bool isProPlayer(uint32_t id);
+extern std::pair<double, double> initialRatingAndDeviation(uint32_t id, gamemodes::GameMode gameMode);
 
 }

@@ -1,23 +1,23 @@
 
-// C++ includes:
 #include <algorithm>
 #include <fstream>
 #include <regex>
 
-// Local includes:
+#include "blitzmap.h"
 #include "cplusplus.h"
-//#include "global.h"
 #include "knownplayers.h"
+#include "players.h"
 #include "logging.h"
-//#include "map.h"
 #include "mapstats.h"
+#include "stringtools.h"
 
 // TODO:
 // - Most games a day/month/year
 
 /*!
  */
-MapStats::MapStats() :
+MapStats::MapStats(gamemodes::GameMode gameMode) :
+    _gameMode(gameMode),
     _longestGames([](const Upset &a, const Upset &b) { return a.duration > b.duration; })
 {
 }
@@ -30,24 +30,24 @@ void MapStats::processGame(const Game &game, const Players &players)
 
     static std::set<std::string> ignoredMaps;
 
-    int mapIndex = map::toIndex(game.mapName());
+    int mapIndex = blitzmap::toIndex(game.mapName());
     int winner = game.winnerIndex();
 
-    if (g_gameMode == gamemodes::Blitz && mapIndex < 0)
+    if (_gameMode == gamemodes::Blitz && mapIndex < 0)
     {
         // Not interested in some maps.
-        if (ignoredMaps.find(game.mapName().toStdString()) == ignoredMaps.end())
+        if (ignoredMaps.find(game.mapName()) == ignoredMaps.end())
         {
             Log::info() << "Ignoring map '" << game.mapName() << "' while making map stats.";
-            ignoredMaps.insert(game.mapName().toStdString());
+            ignoredMaps.insert(game.mapName());
         }
         return;
     }
 
-    std::string mapName = (g_gameMode == gamemodes::Blitz) ? map::__names[mapIndex].toStdString() : game.mapName().toStdString();
+    std::string mapName = (_gameMode == gamemodes::Blitz) ? blitzmap::__names[mapIndex] : game.mapName();
 
     // Normalize map name for RA2.
-    if (g_gameMode == gamemodes::RedAlert2 && mapName.size() > 2)
+    if (_gameMode == gamemodes::RedAlert2 && mapName.size() > 2)
     {
         if (mapName[0] >= '0' && mapName[0] <= '9')
         {
@@ -68,10 +68,14 @@ void MapStats::processGame(const Game &game, const Players &players)
         }
     }
 
-    QDate date(game.date().year(), game.date().month(), 1);
+    //QDate date(game.date().year(), game.date().month(), 1);
+    //std::chrono::year_month_day = game.date();
+
+    std::chrono::year_month_day date{game.date().year(), game.date().month(), std::chrono::day{1}};
+
     _gameCountsPerMonthAndPlayer[date][mapName].count++;
-    _gameCountsPerMonthAndPlayer[date][mapName].differentPlayers.insert(game.player(0));
-    _gameCountsPerMonthAndPlayer[date][mapName].differentPlayers.insert(game.player(1));
+    _gameCountsPerMonthAndPlayer[date][mapName].differentPlayers.insert(game.userId(0));
+    _gameCountsPerMonthAndPlayer[date][mapName].differentPlayers.insert(game.userId(1));
     if (game.duration() > 0)
     {
         _averageDuration[mapName].first += game.duration();
@@ -89,16 +93,16 @@ void MapStats::processGame(const Game &game, const Players &players)
     if (diff > 300.0)
     {
         // Loser needs to have deviation < 120 or must have been active before.
-        if (!game.isBot() && (game.deviation(winner ^ 1) < 120 || players[game.player(winner ^ 1)].wasActive()))
+        if (!game.isBot() && (game.deviation(winner ^ 1) < 120 || players[game.userId(winner ^ 1)].wasActive()))
         {
-            Upset upset{ game.date(), game.player(winner), game.player(winner ^ 1), mapName, game.faction(winner), game.faction(winner ^ 1), diff };
+            Upset upset{ game.date(), game.userId(winner), game.userId(winner ^ 1), mapName, game.faction(winner), game.faction(winner ^ 1), diff };
             _upsetsMonthly[date].insert(upset);
             if (_upsetsMonthly[date].size() > 20)
             {
                 _upsetsMonthly[date].erase(std::prev(_upsetsMonthly[date].end()));
             }
 
-            QDate yearBoundary = QDate::currentDate().addDays(-365);
+            auto yearBoundary = floor<std::chrono::days>(std::chrono::system_clock::now()) - std::chrono::days(365);
             if (date >= yearBoundary)
             {
                 _upsetsLast12Month.insert(upset);
@@ -108,7 +112,7 @@ void MapStats::processGame(const Game &game, const Players &players)
                 _upsetsLast12Month.erase(std::prev(_upsetsLast12Month.end()));
             }
 
-            QDate monthBoundary = QDate::currentDate().addDays(-31);
+            auto monthBoundary = floor<std::chrono::days>(std::chrono::system_clock::now()) - std::chrono::days(31);
             if (date >= monthBoundary)
             {
                 _upsetsLast30Days.insert(upset);
@@ -131,7 +135,7 @@ void MapStats::processGame(const Game &game, const Players &players)
     {
         // First, we normalize the duration.
         uint32_t duration = game.duration() * game.fps() / 59;
-        Upset upset{ game.date(), game.player(winner), game.player(winner ^ 1), mapName, game.faction(winner), game.faction(winner ^ 1), diff, duration };
+        Upset upset{ game.date(), game.userId(winner), game.userId(winner ^ 1), mapName, game.faction(winner), game.faction(winner ^ 1), diff, duration };
         _longestGames.insert(upset);
         if (_longestGames.size() > 25)
         {
@@ -140,33 +144,33 @@ void MapStats::processGame(const Game &game, const Players &players)
     }
 
     // Now do the real map stats. Only interested in different faction games.
-    if (game.faction1() == game.faction2())
+    if (game.faction(0) == game.faction(1))
     {
         return;
     }
 
-    gameCount++;
+    _gameCount++;
 
-    gamesetup::Setup factionSetup = game.setup();
+    factions::Setup factionSetup = game.setup();
 
     // Flip setups if neccessary.
-    if (factionSetup == gamesetup::SvA)
+    if (factionSetup == factions::SvA)
     {
-        factionSetup = gamesetup::AvS;
+        factionSetup = factions::AvS;
     }
-    else if (factionSetup == gamesetup::YvA)
+    else if (factionSetup == factions::YvA)
     {
-        factionSetup = gamesetup::AvY;
+        factionSetup = factions::AvY;
     }
-    else if (factionSetup == gamesetup::SvY)
+    else if (factionSetup == factions::SvY)
     {
-        factionSetup = gamesetup::YvS;
+        factionSetup = factions::YvS;
     }
 
-    if (factionSetup == gamesetup::AvS)
+    if (factionSetup == factions::AvS)
     {
-        uint32_t alliedPlayerIndex = game.faction1() == factions::Allied ? 0 : 1;
-        uint32_t sovietPlayerIndex = game.faction1() == factions::Soviet ? 0 : 1;
+        uint32_t alliedPlayerIndex = game.faction(0) == factions::Allied ? 0 : 1;
+        uint32_t sovietPlayerIndex = game.faction(1) == factions::Soviet ? 0 : 1;
 
         Rating alliedRating(game.rating(alliedPlayerIndex), game.deviation(alliedPlayerIndex), glicko::initialVolatility);
         Rating sovietRating(game.rating(sovietPlayerIndex), game.deviation(sovietPlayerIndex), glicko::initialVolatility);
@@ -184,10 +188,10 @@ void MapStats::processGame(const Game &game, const Players &players)
 
         _mapStats[factionSetup][mapName].addGame(expectedWinRate, (game.winnerIndex() == static_cast<int>(alliedPlayerIndex)));
     }
-    else if (factionSetup == gamesetup::AvY)
+    else if (factionSetup == factions::AvY)
     {
-        uint32_t alliedPlayerIndex = game.faction1() == factions::Allied ? 0 : 1;
-        uint32_t yuriPlayerIndex = game.faction1() == factions::Yuri ? 0 : 1;
+        uint32_t alliedPlayerIndex = game.faction(0) == factions::Allied ? 0 : 1;
+        uint32_t yuriPlayerIndex = game.faction(0) == factions::Yuri ? 0 : 1;
 
         Rating alliedRating(game.rating(alliedPlayerIndex), game.deviation(alliedPlayerIndex), glicko::initialVolatility);
         Rating yuriRating(game.rating(yuriPlayerIndex), game.deviation(yuriPlayerIndex), glicko::initialVolatility);
@@ -205,10 +209,10 @@ void MapStats::processGame(const Game &game, const Players &players)
 
         _mapStats[factionSetup][mapName].addGame(expectedWinRate, (game.winnerIndex() == static_cast<int>(alliedPlayerIndex)));
     }
-    else if (factionSetup == gamesetup::YvS)
+    else if (factionSetup == factions::YvS)
     {
-        uint32_t sovietPlayerIndex = game.faction1() == factions::Soviet ? 0 : 1;
-        uint32_t yuriPlayerIndex = game.faction1() == factions::Yuri ? 0 : 1;
+        uint32_t sovietPlayerIndex = game.faction(0) == factions::Soviet ? 0 : 1;
+        uint32_t yuriPlayerIndex = game.faction(0) == factions::Yuri ? 0 : 1;
 
         Rating sovietRating(game.rating(sovietPlayerIndex), game.deviation(sovietPlayerIndex), glicko::initialVolatility);
         Rating yuriRating(game.rating(yuriPlayerIndex), game.deviation(yuriPlayerIndex), glicko::initialVolatility);
@@ -230,20 +234,20 @@ void MapStats::processGame(const Game &game, const Players &players)
 
 /*!
  */
-void MapStats::finalize(const Players &players)
+void MapStats::finalize(const std::filesystem::path &directory, const Players &players)
 {
     Log::info() << "Finalizing map statistics.";
 
     using json = nlohmann::json;
 
-    static std::vector<gamesetup::Setup> factionSetups = { gamesetup::AvS, gamesetup::AvY, gamesetup::YvS };
+    static std::vector<factions::Setup> factionSetups = { factions::AvS, factions::AvY, factions::YvS };
 
-    for (gamesetup::Setup factionSetup : factionSetups)
+    for (factions::Setup factionSetup : factionSetups)
     {
-        factions::Faction firstFaction = gamesetup::firstFaction(factionSetup);
-        factions::Faction secondFaction = gamesetup::secondFaction(factionSetup);
-        std::string loweredFirstFactionName = factions::name(firstFaction).toLower().toStdString();
-        std::string loweredSecondFactionName = factions::name(secondFaction).toLower().toStdString();
+        factions::Faction firstFaction = factions::firstFaction(factionSetup);
+        factions::Faction secondFaction = factions::secondFaction(factionSetup);
+        std::string loweredFirstFactionName = stringtools::toLower(factions::name(firstFaction));
+        std::string loweredSecondFactionName = stringtools::toLower(factions::name(secondFaction));
 
         json data = json::object();
 
@@ -252,21 +256,21 @@ void MapStats::finalize(const Players &players)
                                        { { "index", 0 }, { "header", "#" } , { "name", "rank" } },
                                        { { "index", 1 }, { "header", "Map" } , { "name", "map" } },
                                        { { "index", 2 }, { "header", "Games" } , { "name", "game_count" }, { "info", "Number of games taken into account. Some games are sorted out, e.g. very low level games or games with players on high deviation." } },
-                                       { { "index", 3 }, { "header", factions::name(firstFaction).toStdString() + " win rate" } , { "name", "win_rate" }, { "info", "The win rate considers elo. A value of e.g. 55% means that an allied player with the exact same elo as a soviet player, is expected to win 55% of the games they play on this map." } },
+                                       { { "index", 3 }, { "header", factions::name(firstFaction) + " win rate" } , { "name", "win_rate" }, { "info", "The win rate considers elo. A value of e.g. 55% means that an allied player with the exact same elo as a soviet player, is expected to win 55% of the games they play on this map." } },
                                        { { "index", 4 }, { "header", "&#x2300; Duration" } , { "name", "average_duration" }, { "info", "The average game time on this map with this specific setup." } },
                                        });
 
         std::set<std::pair<std::string, const Probabilities&>> result;
 
-        QMap<std::string, Probabilities> &mapStats = _mapStats[factionSetup];
+        std::map<std::string, Probabilities> &mapStats = _mapStats[factionSetup];
 
         for (auto it = mapStats.begin(); it != mapStats.end(); ++it)
         {
-            it.value().finalize();
-            result.insert({ it.key(), it.value() });
+            it->second.finalize();
+            result.insert({ it->first, it->second });
         }
 
-        std::string factionPercent = factions::name(firstFaction).toStdString() + "%";
+        std::string factionPercent = factions::name(firstFaction) + "%";
         while (factionPercent.size() < 8)
         {
             factionPercent += " ";
@@ -290,23 +294,26 @@ void MapStats::finalize(const Players &players)
                 jMap["map"] = it->first;
                 jMap["expected"] = it->second.expected();
                 jMap["actual"] = it->second.actual();
-                jMap["win_rate"] = (QString::number(it->second.result() * 100, 'f', 2) + "%").toStdString();
+                double winRateRaw = it->second.result() * 100;
+                std::ostringstream oss1;
+                oss1 << std::fixed << std::setprecision(2) << winRateRaw;
+                jMap["win_rate"] = oss1.str();
                 jMap["win_rate_rounded"] = static_cast<uint32_t>(it->second.result() * 100);
                 jMap[loweredFirstFactionName + "_wins"] = it->second.wins();
                 jMap[loweredFirstFactionName + "_losses"] = it->second.losses();
                 jMap["game_count"] = it->second.losses() + it->second.wins();
 
                 uint32_t averageDuration = _averageDuration[it->first].first / _averageDuration[it->first].second;
-                QString theSeconds = QString::number(averageDuration % 60);
+                std::string theSeconds = std::to_string(averageDuration % 60);
                 if (theSeconds.size() == 1)
                 {
                     theSeconds = "0" + theSeconds;
                 }
-                jMap["average_duration"] = QString("%1:%2").arg(averageDuration / 60).arg(theSeconds).toStdString();
+                jMap["average_duration"] = std::to_string(averageDuration / 60) + ":" + theSeconds;
 
                 jMap["rank"] = counter++;
 
-                if (g_gameMode == gamemodes::Blitz)
+                if (_gameMode == gamemodes::Blitz)
                 {
                     if (it->second.result() > 0.55)
                     {
@@ -344,29 +351,33 @@ void MapStats::finalize(const Players &players)
                     mapName.push_back(' ');
                 }
 
-                QString value = QString::number(it->second.result() * 100, 'f', 2);
+
+                double valueRaw = it->second.result() * 100;
+                std::ostringstream oss2;
+                oss2 << std::fixed << std::setprecision(2) << valueRaw;
+                std::string value = oss2.str();
                 while (value.size() < 8)
                 {
                     value = " " + value;
                 }
 
-                QString games = QString::number(it->second.wins() + it->second.losses());
+                std::string games = std::to_string(it->second.wins() + it->second.losses());
                 while (games.size() < 6)
                 {
                     games = " " + games;
                 }
 
-                QString seconds = QString::number(averageDuration % 60);
+                std::string seconds = std::to_string(averageDuration % 60);
                 if (seconds.size() == 1)
                 {
                     seconds = "0" + seconds;
                 }
-                QString duration = QString("%1:%2").arg(averageDuration / 60).arg(seconds);
+                std::string duration = std::to_string(averageDuration / 60) + ":" + seconds;
                 while (duration.size() < 8)
                 {
                     duration = " " + duration;
                 }
-                ss << "|" << mapName << "|" << value.toStdString() << "|" << games.toStdString() << "|" << duration.toStdString() << "|\n";
+                ss << "|" << mapName << "|" << value << "|" << games << "|" << duration << "|\n";
 
                 jMaps.push_back(jMap);
             }
@@ -381,13 +392,13 @@ void MapStats::finalize(const Players &players)
             continue;
         }
 
-        std::string mapstatsFile = QString("%1_mapstats_%2").arg(gamemodes::shortName(g_gameMode), QString::fromStdString(gamesetup::toString(factionSetup)).toLower()).toStdString();
+        std::string mapstatsFile =  gamemodes::shortName(_gameMode) + "_mapstats_" + stringtools::toLower(factions::toString(factionSetup));
 
-        std::ofstream stream(pathFromFilename(mapstatsFile + ".json"));
+        std::ofstream stream(directory / (mapstatsFile + ".json"));
         stream << std::setw(4) << data << std::endl;
         stream.close();
 
-        std::ofstream streamTxt(pathFromFilename(mapstatsFile + ".txt"));
+        std::ofstream streamTxt(directory / (mapstatsFile + ".txt"));
         streamTxt << ss.str();
         streamTxt.close();
     }
@@ -395,25 +406,27 @@ void MapStats::finalize(const Players &players)
     Log::info() << "Map statistics created.";
 }
 
-void MapStats::exportMapsPlayed()
+/*!
+ */
+void MapStats::exportMapsPlayed(const std::filesystem::path &directory)
 {
     using json = nlohmann::json;
 
     // Yearly map.
-    QMap<int, QMap<std::string, MapPlayed>> yearlyMaps;
+    std::map<int, std::map<std::string, MapPlayed>> yearlyMaps;
 
     for (auto it = _gameCountsPerMonthAndPlayer.begin(); it != _gameCountsPerMonthAndPlayer.end(); ++it)
     {
-        int year = it.key().year();
-        int month = it.key().month();
+        int year = static_cast<int>(it->first.year());
+        int month = static_cast<unsigned>(it->first.month());
 
         std::set<MapPlayed> playedMaps;
-        const QMap<std::string, MapPlayed> &mapsPlayed = it.value();
+        const std::map<std::string, MapPlayed> &mapsPlayed = it->second;
 
         for (auto it2 = mapsPlayed.begin(); it2 != mapsPlayed.end(); ++it2)
         {
-            std::string mapName = it2.key();
-            MapPlayed mapPlayed = it2.value();
+            std::string mapName = it2->first;
+            MapPlayed mapPlayed = it2->second;
             mapPlayed.mapName = mapName;
             playedMaps.insert(mapPlayed);
             yearlyMaps[year][mapName].count += mapPlayed.count;
@@ -443,18 +456,18 @@ void MapStats::exportMapsPlayed()
                 mapName.push_back(' ');
             }
 
-            QString games = QString::number(itSet->count);
+            std::string games = std::to_string(itSet->count);
             while (games.size() < 6)
             {
                 games = " " + games;
             }
 
-            QString diffPlayers = QString::number(itSet->differentPlayers.size());
+            std::string diffPlayers = std::to_string(itSet->differentPlayers.size());
             while (diffPlayers.size() < 8)
             {
                 diffPlayers = " " + diffPlayers;
             }
-            ssMapsPlayed << "|" << mapName << "|" << games.toStdString() << "|" << diffPlayers.toStdString() << "|\n";
+            ssMapsPlayed << "|" << mapName << "|" << games << "|" << diffPlayers << "|\n";
 
         }
 
@@ -462,12 +475,12 @@ void MapStats::exportMapsPlayed()
 
         std::stringstream ss;
         ss << "maps_played_" << year << "-" << (month < 10 ? "0" : "") << month << ".json";
-        std::ofstream stream(pathFromFilename(ss.str()));
+        std::ofstream stream(directory / ss.str());
         stream << std::setw(4) << maps_played << std::endl;
         stream.close();
 
         std::string filenameTxt = std::regex_replace(ss.str(), std::regex("\\json"), "txt");
-        std::ofstream streamTxt(pathFromFilename(filenameTxt));
+        std::ofstream streamTxt(directory / filenameTxt);
         streamTxt << ssMapsPlayed.str();
         streamTxt.close();
     }
@@ -476,7 +489,7 @@ void MapStats::exportMapsPlayed()
     int year = 2024;
     for (auto it = yearlyMaps[year].begin(); it != yearlyMaps[year].end(); ++it)
     {
-        playedMaps.insert(it.value());
+        playedMaps.insert(it->second);
     }
     std::stringstream ssMapsPlayed;
     ssMapsPlayed << "+--------------------+------+--------+\n";
@@ -500,18 +513,18 @@ void MapStats::exportMapsPlayed()
             mapName.push_back(' ');
         }
 
-        QString games = QString::number(itSet->count);
+        std::string games = std::to_string(itSet->count);
         while (games.size() < 6)
         {
             games = " " + games;
         }
 
-        QString diffPlayers = QString::number(itSet->differentPlayers.size());
+        std::string diffPlayers = std::to_string(itSet->differentPlayers.size());
         while (diffPlayers.size() < 8)
         {
             diffPlayers = " " + diffPlayers;
         }
-        ssMapsPlayed << "|" << mapName << "|" << games.toStdString() << "|" << diffPlayers.toStdString() << "|\n";
+        ssMapsPlayed << "|" << mapName << "|" << games << "|" << diffPlayers << "|\n";
 
     }
 
@@ -519,17 +532,19 @@ void MapStats::exportMapsPlayed()
 
     std::stringstream ss;
     ss << "maps_played_" << year << ".json";
-    std::ofstream stream(pathFromFilename(ss.str()));
+    std::ofstream stream(directory / ss.str());
     stream << std::setw(4) << maps_played << std::endl;
     stream.close();
 
     std::string filenameTxt = std::regex_replace(ss.str(), std::regex("\\json"), "txt");
-    std::ofstream streamTxt(pathFromFilename(filenameTxt));
+    std::ofstream streamTxt(directory / filenameTxt);
     streamTxt << ssMapsPlayed.str();
     streamTxt.close();
 }
 
-void MapStats::exportLongestGames(const Players &players)
+/*!
+ */
+void MapStats::exportLongestGames(const std::filesystem::path &directory, const Players &players)
 {
     using json = nlohmann::json;
 
@@ -540,43 +555,46 @@ void MapStats::exportLongestGames(const Players &players)
     {
         json jLongestGame = json::object();
         jLongestGame["rank"] = rank++;
-        jLongestGame["date"] = it->date.toString("yyyy-MM-dd").toStdString();
-        jLongestGame["winner"] = players[it->winner].alias(true).toStdString();
-        jLongestGame["loser"] = players[it->loser].alias(true).toStdString();
-        jLongestGame["winner_faction"] = factions::shortName(it->factionWinner).toStdString();
-        jLongestGame["loser_faction"] = factions::shortName(it->factionLoser).toStdString();
+        jLongestGame["date"] = stringtools::fromDate(it->date);
+        jLongestGame["winner"] = players[it->winner].alias();
+        jLongestGame["loser"] = players[it->loser].alias();
+        jLongestGame["winner_faction"] = factions::shortName(it->factionWinner);
+        jLongestGame["loser_faction"] = factions::shortName(it->factionLoser);
         jLongestGame["map"] = it->map;
         jLongestGame["duration_seconds"] = it->duration;
         jLongestGames.push_back(jLongestGame);
     }
 
-    std::ofstream streamLongest(pathFromFilename("longest_games.json"));
+    std::ofstream streamLongest(directory / "longest_games.json");
     streamLongest << std::setw(4) << jLongestGames << std::endl;
     streamLongest.close();
 }
 
-void MapStats::exportUpsets(const Players &players)
+/*!
+ */
+void MapStats::exportUpsets(const std::filesystem::path &directory, const Players &players)
 {
     // Now process upsets.
     for (auto it = _upsetsMonthly.begin(); it != _upsetsMonthly.end(); ++it)
     {
-        int year = it.key().year();
-        int month = it.key().month();
+        int year = static_cast<int>(it->first.year());
+        int month = static_cast<unsigned>(it->first.month());
 
         std::stringstream ss;
         ss << "upsets_" << year << "-" << (month < 10 ? "0" : "") << month << ".json";
 
-        exportUpsets(it.value(), ss.str(), "", players);
+        exportUpsets(directory, it->second, ss.str(), "", players);
     }
 
-    exportUpsets(_upsetsLast12Month, QString("%1_upsets_last12month.json").arg(gamemodes::shortName(g_gameMode)).toStdString(), "Upsets within the last 12 month", players);
-    exportUpsets(_upsetsLast30Days, QString("%1_upsets_last30days.json").arg(gamemodes::shortName(g_gameMode)).toStdString(), "Upsets within the last 30 days", players);
-    exportUpsets(_upsetsAllTime, QString("%1_upsets_alltime.json").arg(gamemodes::shortName(g_gameMode)).toStdString(), "Biggest upsets of all time", players);
+    exportUpsets(directory, _upsetsLast12Month, gamemodes::shortName(_gameMode) + "_upsets_last12month.json", "Upsets within the last 12 month", players);
+    exportUpsets(directory, _upsetsLast30Days, gamemodes::shortName(_gameMode) + "_upsets_last30days.json", "Upsets within the last 30 days", players);
+    exportUpsets(directory, _upsetsAllTime, gamemodes::shortName(_gameMode) + "_upsets_alltime.json", "Biggest upsets of all time", players);
 }
 
 /*!
  */
 void MapStats::exportUpsets(
+    const std::filesystem::path &directory,
     const std::multiset<Upset> &upsets,
     const std::string &filename,
     const std::string &description,
@@ -605,19 +623,19 @@ void MapStats::exportUpsets(
     {
         json jUpset = json::object();
         jUpset["rank"] = rank++;
-        jUpset["date"] = it->date.toString("yyyy-MM-dd").toStdString();
-        jUpset["winner"] = players[it->winner].alias(true).toStdString();
-        jUpset["loser"] = players[it->loser].alias(true).toStdString();
-        jUpset["faction_winner"] = factions::shortName(it->factionWinner).toStdString();
-        jUpset["faction_loser"] = factions::shortName(it->factionLoser).toStdString();
+        jUpset["date"] = stringtools::fromDate(it->date);
+        jUpset["winner"] = players[it->winner].alias();
+        jUpset["loser"] = players[it->loser].alias();
+        jUpset["faction_winner"] = factions::shortName(it->factionWinner);
+        jUpset["faction_loser"] = factions::shortName(it->factionLoser);
         jUpset["map"] = it->map;
-        jUpset["rating_difference"] = QString::number(it->eloDifference, 'f', 0).toStdString();
+        jUpset["rating_difference"] = std::to_string(static_cast<int>(it->eloDifference));
         jUpsets.push_back(jUpset);
     }
 
     data["data"] = jUpsets;
 
-    std::ofstream stream(pathFromFilename(filename));
+    std::ofstream stream(directory / filename);
     stream << std::setw(4) << data << std::endl;
     stream.close();
 }

@@ -25,3 +25,22 @@ std::string stringtools::trimmed(const std::string &str)
 
     return (start == std::string::npos) ? "" : str.substr(start, end - start + 1);
 }
+
+std::string stringtools::fromDate(const std::chrono::year_month_day &date)
+{
+    std::stringstream ss;
+
+    ss << int(date.year()) << '-';
+
+    if (static_cast<unsigned>(date.month()) < 10)
+        ss << "0";
+
+    ss << static_cast<unsigned>(date.month()) << "-";
+
+    if (static_cast<unsigned>(date.day()) < 10)
+        ss << "0";
+
+    ss << static_cast<unsigned>(date.day());
+
+    return ss.str();
+}

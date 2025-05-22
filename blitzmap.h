@@ -1,8 +1,8 @@
 
 #pragma once
 
+#include <array>
 #include <string>
-#include <vector>
 
 namespace blitzmap
 {
@@ -14,15 +14,18 @@ enum MapSize
     Large = 2
 };
 
-extern std::vector<std::string> __names;
-extern std::vector<std::string> __shortNames;
-extern std::vector<MapSize> __mapSizes;
+extern std::array<std::string, 43> __names;
+extern std::array<std::string, 43> __shortNames;
+extern std::array<MapSize, 43> __mapSizes;
 
 //! Get the index to a map name. Return -1 if map could not be found.
 int toIndex(const std::string &name);
 
 //! Get the number of maps.
-int count();
+constexpr std::size_t count()
+{
+    return __names.size();
+}
 
 } // namespace blitzmap
 

@@ -1,8 +1,9 @@
- 
 
 #pragma once
 
+#include <chrono>
 #include <iostream>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -20,7 +21,8 @@ public:
         Error = 4,
         Critical = 5,
         Fatal = 6,
-        Count = 7
+        Count = 7,
+        NoLog = 8
 
     }; // enum Level
 
@@ -48,9 +50,19 @@ public:
         return Log(Debug);
     }
 
+    static Log debug(bool condition)
+    {
+        return condition ? Log(Debug) : Log(NoLog);
+    }
+
     static Log verbose()
     {
         return Log(Verbose);
+    }
+
+    static Log verbose(bool condition)
+    {
+        return condition ? Log(Verbose) : Log(NoLog);
     }
 
     static Log info()
@@ -58,9 +70,19 @@ public:
         return Log(Info);
     }
 
+    static Log info(bool condition)
+    {
+        return condition ? Log(Info) : Log(NoLog);
+    }
+
     static Log warning()
     {
         return Log(Warning);
+    }
+
+    static Log warning(bool condition)
+    {
+        return condition ? Log(Warning) : Log(NoLog);
     }
 
     static Log error()
@@ -68,14 +90,34 @@ public:
         return Log(Error);
     }
 
+    static Log error(bool condition)
+    {
+        return condition ? Log(Error) : Log(NoLog);
+    }
+
     static Log critical()
     {
         return Log(Critical);
     }
 
+    static Log critical(bool condition)
+    {
+        return condition ? Log(Critical) : Log(NoLog);
+    }
+
     static Log fatal()
     {
         return Log(Fatal);
+    }
+
+    static Log fatal(bool condition)
+    {
+        return condition ? Log(Fatal) : Log(NoLog);
+    }
+
+    static Log noLog()
+    {
+        return Log(NoLog);
     }
 
     //! Stream operator.
@@ -85,6 +127,49 @@ public:
         if (Log::_enabled)
         {
             _os << t;
+        }
+        return *this;
+    }
+
+    template <typename T>
+    Log& operator<<(const std::set<T> &values)
+    {
+        bool isFirst = true;
+        _os << "[";
+
+        for (T value : values)
+        {
+            if (isFirst)
+            {
+                _os << value;
+                isFirst = false;
+            }
+            else
+            {
+                _os << ", " << value;
+            }
+        }
+
+        _os << "]";
+
+        return *this;
+    }
+
+    Log& operator<<(const std::chrono::year_month_day &date)
+    {
+        if (Log::_enabled)
+        {
+            _os << int(date.year()) << '-';
+
+            if (static_cast<unsigned>(date.month()) < 10)
+                _os << "0";
+
+            _os << static_cast<unsigned>(date.month()) << "-";
+
+            if (static_cast<unsigned>(date.day()) < 10)
+                _os << "0";
+
+            _os << static_cast<unsigned>(date.day());
         }
         return *this;
     }
@@ -119,14 +204,22 @@ public:
         }
         else
         {
-            Log::error() << "Unknown log level '" << level << "'. Returning 'warning'.";
-            return Log::Warning;
+            return Log::NoLog;
         }
+    }
+
+    //! Set flag for details information about every log line.
+    static void addTimestampAndLogLevel(bool enabled)
+    {
+        Log::_showTimestampAndLogLevel = enabled;
     }
 
 private:
     //! The log level.
     Level _level;
+
+    //! Do we want timestamps and log levels?
+    static bool _showTimestampAndLogLevel;
 
     //! The output string stream.
     std::ostringstream _os;

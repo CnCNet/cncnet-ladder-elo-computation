@@ -1,7 +1,8 @@
 
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <optional>
-#include <fstream>
 
 #include <mysql_driver.h>
 #include <mysql_connection.h>
@@ -9,195 +10,302 @@
 #include <cppconn/resultset.h>
 #include <nlohmann/json.hpp>
 
-#include "logging.h"
+#include "cplusplus.h"
+#include "databaseconnection.h"
 #include "game.h"
+#include "logging.h"
+#include "mapstats.h"
+#include "options.h"
+#include "players.h"
 #include "stringtools.h"
 
-std::map<std::string, std::map<uint32_t, Game>> gamesByLadder;
-std::map<uint32_t, std::string> userToAlias;
-std::map<std::string, std::map<std::string, uint32_t>> nickToUserId;
-
-bool loadUser(const std::string &ladder, const std::string &name, sql::Connection* connection)
+int main(int argc, char* argv[])
 {
-    /* -- Nicks for all ladders:
-    std::unique_ptr<sql::PreparedStatement> stmt(
-        connection->prepareStatement(
-            "SELECT players.user_id, users.alias, ladders.abbreviation, players.username "
-            "FROM players "
-            "JOIN ladders ON players.ladder_id = ladders.id "
-            "JOIN users ON users.id = players.user_id "
-            "WHERE players.user_id = ("
-            "  SELECT user_id FROM players p2 "
-            "  JOIN ladders l2 ON p2.ladder_id = l2.id "
-            "  WHERE p2.username = ? AND l2.abbreviation = ? "
-            "  LIMIT 1"
-            ") ORDER BY ladders.abbreviation"
-            )
-        );
-    */
+    Options options(argc, argv);
+    if (options.quit())
+        return options.returnValue();
 
-    std::unique_ptr<sql::PreparedStatement> stmt(
-        connection->prepareStatement(
-            "SELECT players.user_id, players.username, ladders.abbreviation, users.alias "
-            "FROM players "
-            "JOIN ladders ON players.ladder_id = ladders.id "
-            "JOIN users ON players.user_id = users.id "
-            "WHERE players.user_id = ( "
-            "  SELECT user_id "
-            "  FROM players p2 "
-            "  JOIN ladders l2 ON p2.ladder_id = l2.id "
-            "  WHERE p2.username = ? AND l2.abbreviation = ? "
-            "  LIMIT 1 "
-            ") "
-            "AND ladders.abbreviation = ? "
-            "ORDER BY players.username; "
-        )
-    );
-
-    stmt->setString(1, name);
-    stmt->setString(2, ladder);
-    stmt->setString(3, ladder);
-    std::unique_ptr<sql::ResultSet> result(stmt->executeQuery());
-
-    bool isEmpty = true;
-
-    while (result->next())
+    DatabaseConnection connection(options.host, options.port, options.ladderAbbreviation);
+    if (options.gameMode == gamemodes::Unknown)
     {
-        uint32_t userId = result->getInt("user_id");
-
-        if (isEmpty)
+        if (!connection.ladderExists(options.ladderAbbreviation))
         {
-            isEmpty = false;
-            std::string alias = result->getString("alias");
-            userToAlias[userId] = alias;
+            std::cerr << "Game mode '" << options.ladderAbbreviation << "' is no known abbreviation for a ladder." << std::endl;
+            return 1;
         }
-
-        std::string nick = result->getString("username");
-        nickToUserId[ladder][nick] = userId;
+        else
+        {
+            std::cout << "Game mode '" << options.ladderAbbreviation << "' is exists, but has not dedicated "
+                      << " support. Result might be poor." << std::endl;
+        }
     }
 
-    return !isEmpty;
-}
+    Log::info();
+    Log::addTimestampAndLogLevel(true);
+    Log::info() << "Starting elo computation.";
+    Log::info() << "Initiating duplicates.";
+    connection.initDuplicates();
 
+    // Some known duplicates, some not recognized by cncnet. That's why they are set manually.
+    connection.addDuplicates(  268, {    69 });
+    connection.addDuplicates( 3968, { 18319 });
+    connection.addDuplicates(17651, { 40343, 43364, 44568 });
+    connection.addDuplicates(19083, { 10459 });
+    connection.addDuplicates(33933, { 300 });
+    connection.addDuplicates(37077, { 58873, 59236, 59916, 68898, 68942, 71304 });
+    connection.addDuplicates(40500, {    24,  1029, 68169 });
+    connection.addDuplicates(44616, { 67416 });
+    connection.addDuplicates(47880, { 71623 });
+    connection.addDuplicates(53313, { 59298, 76620 });
+    connection.addDuplicates(54423, { 20498 });
+    connection.addDuplicates(55626, { 73649 });
+    connection.addDuplicates(58766, { 58764, 66502 });
+    connection.addDuplicates(59413, {   554, 61680 });
+    connection.addDuplicates(60300, { 61757, 65104, 65875 });
+    connection.addDuplicates(63398, { 63331 });
+    connection.addDuplicates(67132, { 1179 });
+    connection.addDuplicates(67596, { 36814 });
 
-void fetchRecentGamesByLadder(
-    const std::string& ladder,
-    sql::Connection* connection,
-    std::map<uint32_t, Game> &games)
-{
-    std::unique_ptr<sql::PreparedStatement> stmt(
-        connection->prepareStatement(
-            "SELECT "
-            "  games.id AS gameId, "
-            "  players.username AS playerUsername, "
-            "  player_game_reports.won AS playerWon, "
-            "  player_game_reports.points, "
-            "  sides.name AS playerCountry, "
-            "  COALESCE(maps.name, games.scen) AS map, "
-            "  game_reports.duration, "
-            "  game_reports.fps, "
-            "  UNIX_TIMESTAMP(games.updated_at) AS timestamp, "
-            "  games.updated_at AS played "
-            "FROM games "
-            "JOIN ladder_history ON games.ladder_history_id = ladder_history.id "
-            "JOIN ladders ON ladder_history.ladder_id = ladders.id "
-            "JOIN game_reports ON game_reports.id = games.game_report_id "
-            "JOIN player_game_reports ON player_game_reports.game_report_id = games.game_report_id "
-            "JOIN players ON players.id = player_game_reports.player_id "
-            "JOIN stats2 ON stats2.id = player_game_reports.stats_id "
-            "LEFT JOIN sides ON sides.local_id = stats2.cty AND sides.ladder_id = ladders.id "
-            "LEFT JOIN qm_matches qmm ON qmm.id = games.qm_match_id "
-            "LEFT JOIN qm_maps qmap ON qmm.qm_map_id = qmap.id "
-            "LEFT JOIN maps maps ON maps.id = qmap.map_id "
-            "WHERE ladders.abbreviation = ? "
-            "ORDER BY games.updated_at ASC "
-        )
-    );
+    Log::info() << "Duplicates initiated.";
 
-    stmt->setString(1, ladder);
+    Players players;
+    std::map<uint32_t, Game> games = connection.fetchGames();
 
-    std::unique_ptr<sql::ResultSet> result(stmt->executeQuery());
-
-    while (result->next())
+    // Run 1: Go through the games and set the correct user id for every game.
+    //        Consider duplicates and only use the base account to have one
+    //        elo value for each player, no matter how many account he has.
+    for (auto it = games.begin(); it != games.end(); ++it)
     {
-        uint32_t gameId = static_cast<uint32_t>(result->getInt("gameId"));
+        Game &game = it->second;
 
-        if (!games.contains(gameId))
+        Log::debug() << "Processing game " << game.id() << " (Run 1).";
+
+        for (uint32_t i = 0; i < game.playerCount(); i++)
         {
-            uint32_t fps = static_cast<uint32_t>(result->getInt("fps"));
-            uint32_t duration = static_cast<uint32_t>(result->getInt("duration"));
-            uint32_t timestamp = static_cast<uint32_t>(result->getInt64("timestamp"));
-            std::string map = result->getString("map");
-            games.emplace(gameId, Game(gameId, map, timestamp, fps, duration));
+            std::string playerName = game.playerName(i);
+            uint32_t userId = players.userId(playerName);
+
+            if (userId == 0)
+            {
+                Log::debug() << "Player '" << playerName << "' is still unknown. Trying to find that player in the db.";
+
+                // Load the player first.
+                uint32_t temporaryUserId = connection.loadPlayer(playerName, players);
+
+                if (!connection.knownUser(temporaryUserId))
+                {
+                    Log::fatal() << "Did not expect player '" << playerName << "' (" << temporaryUserId << ") to have played a game.";
+                    continue;
+                }
+
+                // Now load its duplicates.
+                std::set<uint32_t> duplicates = connection.getDuplicates(temporaryUserId);
+                Log::verbose(!duplicates.empty()) << "Duplicates of user " << temporaryUserId << " are: " << duplicates;
+
+                std::set<uint32_t> forbiddenBaseAccounts;
+
+                for (uint32_t duplicate : duplicates)
+                {
+                    if (players.contains(duplicate))
+                    {
+                        Log::warning() << "User " << duplicate << " already loaded while processing duplicates. This is not supposed to happen.";
+                        continue;
+                    }
+
+                    if (!connection.loadPlayer(duplicate, players))
+                    {
+                        if (!connection.loadPlayerWithNoUser(duplicate, players))
+                        {
+                            Log::info() << "User " << duplicate << " not part of table 'users' and thus cannot "
+                                        << "be used as a base account.";
+                            forbiddenBaseAccounts.insert(duplicate);
+                        }
+                    }
+                }
+
+                // Get the base user account. Might be the current id, that's why
+                // it is inserted in the list of duplicates.
+                duplicates.insert(temporaryUserId);
+                userId = connection.getBaseAccount(duplicates, forbiddenBaseAccounts);
+                duplicates.erase(userId);
+                Log::debug(!duplicates.empty()) << "Final duplicates of user " << userId << " are: " << duplicates;
+
+                // Consider all duplicates and link all available player names to the base account.
+                players.markDuplicates(userId, duplicates);
+                Log::fatal(userId != players.userId(playerName)) << "Processing of duplicates went wrong ("
+                                                                 << userId << " != " << players.userId(playerName) << ").";
+            }
+
+            game.setPlayer(i, userId);
+            players[userId].increasePlayerNameUsage(playerName);
         }
 
-        auto it = games.find(gameId);
-        Game *game = (it != games.end()) ? &(it->second) : nullptr;
-        if (game == nullptr)
-            continue;
+        Log::debug() << "Processed " << game;
+    }
 
-        std::string playerName = result->getString("playerUsername");
-        // TODO: Consider points to determine winner/loser in undecided games.
-        // int32_t points = result->getInt("points");
-        bool won = result->getBoolean("playerWon");
-        std::string playerCountry = result->getString("playerCountry");
+    // Run 2:
 
-        // Get user id by playername.
-        if (!nickToUserId[ladder].contains(playerName))
+    MapStats stats(options.gameMode);
+
+    // TODO: Why subtract 1 day?
+    uint64_t timestamp = games.begin()->second.timestamp();
+    std::chrono::milliseconds ms_since_epoch = std::chrono::milliseconds(timestamp * 1000) - std::chrono::hours(24);
+    std::chrono::system_clock::time_point time_point = std::chrono::system_clock::time_point(ms_since_epoch);
+    std::chrono::time_point<std::chrono::system_clock, std::chrono::days> currentDate = floor<std::chrono::days>(time_point);
+    std::chrono::time_point<std::chrono::system_clock, std::chrono::days> lastDate;
+
+    std::map<uint32_t, Game*> validGames; // Keep a list of valid games.
+    std::map<std::string, int> ignoredMaps; // Only for blitz mode.
+    std::map<std::string, int> unknownPlayers;
+    uint32_t skippedByDuration = 0;
+    uint32_t skippedByFPS = 0;
+    uint32_t skippedInvalid = 0;
+
+    for (auto it = games.begin(); it != games.end(); ++it)
+    {
+        Game &game = it->second;
+
+        Log::debug() << "Processing game " << game << " (Run 2).";
+
+        uint32_t duration = game.duration();
+        gametypes::GameType type = game.gameType();
+        uint32_t fps = game.fps();
+        std::string mapName = game.mapName();
+
+        // Ignore games with less than 35 seconds.
+        if (type == gametypes::Quickmatch && duration != 0 && duration < 35)
         {
-            bool success = loadUser(ladder, playerName, connection);
-            if (!success)
+            skippedByDuration++;
+            continue;
+        }
+
+        // Ignore games with less than 40 fps.
+        if (type == gametypes::Quickmatch && fps > 1 && fps < 40)
+        {
+            Log::verbose() << "Skipping game " << game.id() << " due to " << fps << " fps.";
+            skippedByFPS++;
+            continue;
+        }
+
+        // Ignore games on non-elo maps in blitz.
+        if (options.gameMode == gamemodes::Blitz && blitzmap::toIndex(mapName) == -1)
+        {
+            if (!ignoredMaps.contains(mapName))
             {
-                Log::fatal() << "Unable to determine user from playername '" << playerName << "'.";
+                Log::info() << "Ignoring blitz games on map " << mapName << ".";
+                ignoredMaps[mapName] = 0;
+            }
+            ignoredMaps[mapName]++;
+            continue;
+        }
+
+        // Ignore games with unknown errors.
+        if (!game.isValid())
+        {
+            Log::info() << "Ignoring " << game;
+            skippedInvalid++;
+            continue;
+        }
+
+        // Ignore games with unknown players and test accounts.
+        for (uint32_t j = 0; j < game.playerCount(); j++)
+        {
+            if (!players.contains(game.userId(j)))
+            {
+                Log::verbose() << "Game " << game.id() << " contains an unknown player " << game.playerName(j) << " (" << game.userId(j) << ").";
+                unknownPlayers[game.playerName(j)] = game.userId(j);
+                continue;
+            }
+
+            if (players.isTestAccount(game.userId(j)))
+            {
+                Log::info() << "Player '" << game.playerName(j) << "' is a test player. "
+                            << "Game " << game.id() << " will be ignored.";
                 continue;
             }
         }
 
-        assert(nickToUserId[ladder].contains(playerName));
-        uint32_t userId = nickToUserId[ladder][playerName];
-        game->addPlayer(userId, playerName, factions::fromName(playerCountry), won, 0.0, 0.0);
-    }
-}
+        Log::verbose() << "Timestamp of game " << game.id() << " is " << game.timestamp() << ".";
 
-int main()
-{
+        std::chrono::milliseconds timestamp = std::chrono::milliseconds(static_cast<uint64_t>(game.timestamp()) * 1000);
+        std::chrono::system_clock::time_point currentTimePoint = std::chrono::system_clock::time_point(timestamp);
+        std::chrono::time_point<std::chrono::system_clock, std::chrono::days> date = floor<std::chrono::days>(currentTimePoint);
 
-    try
-    {
-        sql::mysql::MySQL_Driver *driver = sql::mysql::get_mysql_driver_instance();
-        std::unique_ptr<sql::Connection> con(
-            driver->connect("tcp://127.0.0.1:3307", "cncnet", "cncnet")
-            //driver->connect("tcp://host.docker.internal:3307", "cncnet", "cncnet")
-        );
-        con->setSchema("cncnet_api");
+        std::chrono::year_month_day ymd = std::chrono::year_month_day{date};
+        Log::verbose() << "Date of game " << game.id() << " is " << static_cast<int>(ymd.year()) << '-'
+                       << static_cast<unsigned>(ymd.month()) << '-' << static_cast<unsigned>(ymd.day());
 
-        fetchRecentGamesByLadder("blitz", con.get(), gamesByLadder["blitz"]);
+        lastDate = date;
 
-        Log::info() << "Fetched " << gamesByLadder["blitz"].size() << " blitz games.";
-        Log::info() << "Fetched " << userToAlias.size() << " individual blitz players.";
-
-        nlohmann::json testdata;
-        testdata["blitzgames"] = gamesByLadder["blitz"].size();
-        testdata["blitzplayers"] = userToAlias.size();
-
-        // Write json test file.
-        std::ofstream file("/data/test.json");
-        if (file.is_open())
+        for (uint32_t j = 0; j < game.playerCount(); j++)
         {
-            file << testdata.dump(4);
-            file.close();
-        }
-        else
-        {
-            Log::error() << "Unable to write json test file.";
+            uint32_t id = game.userId(j);
+            factions::Faction faction = game.faction(j);
+            game.setRatingAndDeviation(j, players[id].elo(faction), players[id].deviation(faction));
         }
 
-    }
-    catch (sql::SQLException &e)
+        for (uint32_t j = 0; j < game.playerCount(); j++)
+        {
+            players[game.userId(j)].processGame(game, j, false, players);
+        }
+
+        // Date switch. Update players elo values.
+        if (date != currentDate)
+        {
+            currentDate = date;
+            players.update();
+            players.apply(date, true);
+        }
+
+        // Update map stats.
+        if (game.playerCount() == 2)
+        {
+            stats.processGame(game, players);
+        }
+
+        validGames[game.id()] = &game;
+
+    } // for (int i = 0; i < _games.size(); i++)
+
+    // Process the last day.
+    players.update();
+    players.apply(lastDate, true);
+
+    // Some information about skipped games.
+    Log::info() << "Skipped " << skippedByFPS << " games due to low fps.";
+    Log::info() << "Skipped " << skippedByDuration << " games due to duration.";
+    Log::info() << "Skipped " << skippedInvalid << " games due to unknown errors.";
+
+    players.finalize();
+    players.exportActivePlayers(options.outputDirectory, options.gameMode);
+    players.exportBestOfAllTime(options.outputDirectory, options.gameMode);
+    players.exportMostDaysActive(options.outputDirectory, options.gameMode);
+    players.exportAlphabeticalOrder(options.outputDirectory, options.gameMode);
+    players.exportNewPlayers(options.outputDirectory, options.gameMode);
+
+    for (auto it = ignoredMaps.begin(); it != ignoredMaps.end(); ++it)
     {
-        Log::fatal() << "SQL: " << e.what();
-        return 1;
+        Log::info() << "Ignored " << it->second << " games on '" << it->first << "'.";
+    }
+    for (auto it = unknownPlayers.begin(); it != unknownPlayers.end(); ++it)
+    {
+        Log::info() << "Unknown player " << it->first << " (" << it->second << ").";
+    }
+    if (unknownPlayers.empty())
+    {
+        Log::info() << "No unknown players have been found.";
     }
 
-    return 0;
+    Log::info() << "Processed " << validGames.size() << " games. About to finalize stats.";
+
+    // Map stats and player details not suitable for 2v2 games.
+    if (gamemodes::playerCount(options.gameMode) == 2)
+    {
+        stats.finalize(options.outputDirectory, players);
+        stats.exportUpsets(options.outputDirectory, players);
+        stats.exportLongestGames(options.outputDirectory, players);
+        stats.exportMapsPlayed(options.outputDirectory);
+
+        players.exportPlayerDetails(options.outputDirectory, {}, validGames);
+    }
 }

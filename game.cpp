@@ -1,6 +1,6 @@
  
-
 #include <cmath>
+#include <set>
 
 #include "blitzmap.h"
 #include "cplusplus.h"
@@ -40,7 +40,7 @@ bool Game::isBot() const
 {
     uint32_t bot = dts::to_underlying(KnownPlayers::BlitzBot);
     return std::find_if(_participants.begin(), _participants.end(),
-                        [bot](const Participant& p) { return p.id == bot; }) != _participants.end();
+                        [bot](const Participant& p) { return p.userId == bot; }) != _participants.end();
 }
 
 /*!
@@ -53,8 +53,8 @@ bool Game::isVs(uint32_t player1, uint32_t player2) const
         return false;
     }
 
-    return (_participants[0].id == player1 && _participants[1].id == player2)
-           || (_participants[0].id == player2 && _participants[1].id == player1);
+    return (_participants[0].userId == player1 && _participants[1].userId == player2)
+           || (_participants[0].userId == player2 && _participants[1].userId == player1);
 }
 
 /*!
@@ -73,7 +73,7 @@ void Game::addPlayer(uint32_t index, const std::string &playerName, factions::Fa
 
 /*!
  */
-uint32_t Game::playerId(uint32_t index) const
+uint32_t Game::userId(uint32_t index) const
 {
     if (index >= static_cast<uint32_t>(_participants.size()))
     {
@@ -81,7 +81,7 @@ uint32_t Game::playerId(uint32_t index) const
         return 0;
     }
 
-    return _participants[index].id;
+    return _participants[index].userId;
 }
 
 /*!
@@ -122,6 +122,20 @@ void Game::setTimestamp(uint32_t timestamp)
 uint32_t Game::timestamp() const
 {
     return _timestamp;
+}
+
+/*!
+ */
+void Game::setPlayer(uint32_t index, uint32_t userId)
+{
+    if (index >= _participants.size())
+    {
+        Log::error() << "Cannot set player with index " << index << " in game " << _id
+                     << ", because the game has only " << (_participants.size() + 1) << " players.";
+        return;
+    }
+
+    _participants[index].userId = userId;
 }
 
 /*!
@@ -233,29 +247,49 @@ bool Game::isValid() const
 {
     if (_participants.size() == 4)
     {
+        std::set<uint32_t> userIds;
+
         int result = 0;
         for (size_t i = 0; i < _participants.size(); i++)
         {
-            if (_participants[i].id == 0)
+            if (_participants[i].userId == 0)
             {
+                Log::info() << "Unable to resolve all player of game " << _id << ". This game is invalid.";
                 return false;
             }
             result += _participants[i].hasWon ? 1 : -1;
+            userIds.insert(_participants[i].userId);
         }
-        if (result != 0 || isDraw())
+        if (result != 0)
         {
+            Log::warning() << "Winning and losing players of game " << _id << " do not line up.";
             return false;
         }
-        return _id != 0 && _timestamp != 0 && !_isWashed;
+        if (isDraw())
+        {
+            Log::warning() << "There is no draw in 2v2 games. Game " << _id << " is invalid.";
+            return false;
+        }
+        if (userIds.size() != 4)
+        {
+            Log::info() << "Participants of game " << _id << " are duplicates. This game is invalid.";
+            return false;
+        }
+        return _id != 0 && _timestamp != 0;
     }
     else if (_participants.size() == 2)
     {
+        if (_participants[0].userId == _participants[1].userId)
+        {
+            Log::info() << "Game " << _id << " is between duplicates. This game is invalid.";
+            return false;
+        }
+
         bool isValid = (
             _id != 0 &&
             _timestamp != 0 &&
-            _participants[0].id != 0 &&
-            _participants[1].id != 0 &&
-            !_isWashed &&
+            _participants[0].userId != 0 &&
+            _participants[1].userId != 0 &&
             (_isDraw || ((_participants[0].hasWon && !_participants[1].hasWon) || (!_participants[0].hasWon && _participants[1].hasWon))));
         return isValid;
     }
@@ -275,20 +309,6 @@ void Game::setWasDisconnected(bool disconnected)
 bool Game::wasDisconnected() const
 {
     return _wasDisconnected;
-}
-
-/*!
- */
-void Game::setIsWashed(bool washed)
-{
-    _isWashed = washed;
-}
-
-/*!
- */
-bool Game::isWashed() const
-{
-    return _isWashed;
 }
 
 /*!
@@ -403,7 +423,6 @@ std::string Game::factionResult(bool winnerFirst) const
 
 /*!
  */
-/*
 void Game::setRatingAndDeviation(uint32_t playerIndex, double rating, double deviation)
 {
     if (playerIndex >= playerCount())
@@ -412,10 +431,10 @@ void Game::setRatingAndDeviation(uint32_t playerIndex, double rating, double dev
     }
     else
     {
-        _rating[playerIndex] = rating;
-        _deviation[playerIndex] = deviation;
+        _participants[playerIndex].elo = rating;
+        _participants[playerIndex].deviation = deviation;
     }
-}*/
+}
 
 /*!
  */
@@ -487,7 +506,7 @@ int Game::playerIndex(uint32_t playerId) const
 {
     for (size_t i = 0; i < _participants.size(); i++)
     {
-        if (_participants[i].id == playerId)
+        if (_participants[i].userId == playerId)
         {
             return i;
         }
