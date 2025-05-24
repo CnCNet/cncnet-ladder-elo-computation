@@ -36,6 +36,35 @@ uint32_t Game::playerCount() const
 
 /*!
  */
+void Game::determineWinner()
+{
+    int result = 0;
+
+    for (Participant &participant : _participants)
+    {
+        result += participant.hasWon ? 1 : -1;
+    }
+
+    if (result == 0)
+    {
+        // Number of winners matches number of losers.
+        return;
+    }
+
+    result = 0;
+
+    // Try again based on points.
+    for (Participant &participant : _participants)
+    {
+        result += (participant.points > 0) ? 1 : -1;
+        participant.hasWon = participant.points > 0;
+    }
+
+    Log::warning(result != 0) << "Unable to determine winners in game " << _id << ". This game will probably be invalid.";
+}
+
+/*!
+ */
 bool Game::isBot() const
 {
     uint32_t bot = dts::to_underlying(KnownPlayers::BlitzBot);
@@ -66,9 +95,16 @@ bool Game::isVs(KnownPlayers player1, KnownPlayers player2) const
 
 /*!
  */
-void Game::addPlayer(uint32_t index, const std::string &playerName, factions::Faction faction, bool hasWon, double elo, double deviation)
+void Game::addPlayer(
+    uint32_t index,
+    const std::string &playerName,
+    factions::Faction faction,
+    bool hasWon,
+    int points,
+    double elo,
+    double deviation)
 {
-    _participants.emplace_back(Participant{index, playerName, faction, hasWon, elo, deviation});
+    _participants.emplace_back(Participant{index, playerName, faction, hasWon, points, elo, deviation});
 }
 
 /*!
@@ -126,6 +162,20 @@ uint32_t Game::timestamp() const
 
 /*!
  */
+void Game::setLadderAbbreviation(const std::string &ladderAbbreviation)
+{
+    _ladderAbbreviation = ladderAbbreviation;
+}
+
+/*!
+ */
+std::string Game::ladderAbbreviation() const
+{
+    return _ladderAbbreviation;
+}
+
+/*!
+ */
 void Game::setPlayer(uint32_t index, uint32_t userId)
 {
     if (index >= _participants.size())
@@ -146,6 +196,23 @@ std::chrono::year_month_day Game::date() const
     std::chrono::sys_days days = std::chrono::floor<std::chrono::days>(tp_since_epoch);
     return std::chrono::year_month_day{days};
 }
+
+/*!
+ */
+/*
+std::tuple<std::chrono::year_month_day, std::chrono::hh_mm_ss<std::chrono::seconds>> Game::dateTime() const
+{
+    using namespace std::chrono;
+
+    sys_seconds tp_since_epoch{seconds{_timestamp}};
+
+    sys_days days = floor<days>(tp_since_epoch);
+    year_month_day ymd{days};
+
+    hh_mm_ss hms{tp_since_epoch - days};
+
+    return {ymd, hms};
+}*/
 
 /*!
  */

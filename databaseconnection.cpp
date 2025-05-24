@@ -130,6 +130,19 @@ void DatabaseConnection::addDuplicates(uint32_t userId, std::set<uint32_t> dupli
 
 /*!
  */
+void DatabaseConnection::removeDuplicate(uint32_t userId)
+{
+    _duplicates[userId].clear();
+
+    for (auto it = _duplicates.begin(); it != _duplicates.end(); ++it)
+    {
+        std::set<uint32_t> &set = it->second;
+        set.erase(userId);
+    }
+}
+
+/*!
+ */
 std::set<uint32_t> DatabaseConnection::getDuplicates(uint32_t userId)
 {
     return _duplicates[userId];
@@ -307,7 +320,10 @@ std::set<uint32_t> DatabaseConnection::getWebLikeDuplicateAccounts(uint32_t user
 
 /*!
  */
-uint32_t DatabaseConnection::loadPlayer(const std::string &name, Players &players)
+uint32_t DatabaseConnection::loadPlayer(
+    const std::string &name,
+    Players &players,
+    const std::string &ladderAbbreviation)
 {
     // Nicks for all ladders. Not used. Processing one ladder at once.
     /*
@@ -342,12 +358,13 @@ uint32_t DatabaseConnection::loadPlayer(const std::string &name, Players &player
             ") "
             "AND ladders.abbreviation = ? "
             "ORDER BY players.username; "
-            )
-        );
+        )
+    );
 
     statement->setString(1, name);
-    statement->setString(2, _ladder);
-    statement->setString(3, _ladder);
+    statement->setString(2, !ladderAbbreviation.empty() ? ladderAbbreviation : _ladder);
+    statement->setString(3, !ladderAbbreviation.empty() ? ladderAbbreviation : _ladder);
+
     std::unique_ptr<sql::ResultSet> result(statement->executeQuery());
 
     uint32_t userId = 0;
@@ -378,12 +395,12 @@ uint32_t DatabaseConnection::loadPlayer(const std::string &name, Players &player
 
         player->addName(result->getString("username"));
 
-        Log::debug() << "User " << userId << " (" << result->getString("name") << ") has player name '" << result->getString("username") << "'.";
+        Log::info() << "User " << userId << " (" << result->getString("name") << ") has player name '" << result->getString("username") << "'.";
     }
 
     if (player)
     {
-        players.add(*player);
+        players.add(*player, !ladderAbbreviation.empty() ? ladderAbbreviation : _ladder);
     }
 
     return userId;
@@ -391,7 +408,10 @@ uint32_t DatabaseConnection::loadPlayer(const std::string &name, Players &player
 
 /*!
  */
-bool DatabaseConnection::loadPlayerWithNoUser(uint32_t userId, Players &players)
+bool DatabaseConnection::loadPlayerWithNoUser(
+    uint32_t userId,
+    Players &players,
+    const std::string &ladderAbbreviation)
 {
     std::unique_ptr<sql::PreparedStatement> stmt(
         _connection->prepareStatement(
@@ -423,7 +443,7 @@ bool DatabaseConnection::loadPlayerWithNoUser(uint32_t userId, Players &players)
 
     if (player)
     {
-        players.add(*player);
+        players.add(*player, !ladderAbbreviation.empty() ? ladderAbbreviation : _ladder);
         return true;
     }
 
@@ -431,7 +451,10 @@ bool DatabaseConnection::loadPlayerWithNoUser(uint32_t userId, Players &players)
 }
 /*!
  */
-bool DatabaseConnection::loadPlayer(uint32_t userId, Players &players)
+bool DatabaseConnection::loadPlayer(
+    uint32_t userId,
+    Players &players,
+    const std::string &ladderAbbreviation)
 {
     std::unique_ptr<sql::PreparedStatement> stmt(
         _connection->prepareStatement(
@@ -446,7 +469,7 @@ bool DatabaseConnection::loadPlayer(uint32_t userId, Players &players)
         );
 
     stmt->setUInt(1, userId);
-    stmt->setString(2, _ladder);
+    stmt->setString(2, !ladderAbbreviation.empty() ? ladderAbbreviation : _ladder);
 
     std::unique_ptr<sql::ResultSet> result(stmt->executeQuery());
 
@@ -471,7 +494,7 @@ bool DatabaseConnection::loadPlayer(uint32_t userId, Players &players)
 
     if (player)
     {
-        players.add(*player);
+        players.add(*player, !ladderAbbreviation.empty() ? ladderAbbreviation : _ladder);
         Log::debug() << "Loaded player " << userId << ".";
         return true;
     }
@@ -486,19 +509,19 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
 {
     std::map<uint32_t, Game> games;
 
-    std::unique_ptr<sql::PreparedStatement> statement(
-        _connection->prepareStatement(
+    std::string ladderGames(
             "SELECT "
             "  games.id AS gameId, "
             "  players.username AS playerUsername, "
+            "  ladders.abbreviation AS ladderAbbreviation, "
             "  player_game_reports.won AS playerWon, "
             "  player_game_reports.points, "
             "  sides.name AS playerCountry, "
             "  COALESCE(maps.name, games.scen) AS map, "
             "  game_reports.duration, "
             "  game_reports.fps, "
-            "  UNIX_TIMESTAMP(games.updated_at) AS timestamp, "
-            "  games.updated_at AS played "
+            "  UNIX_TIMESTAMP(games.created_at) AS timestamp, "
+            "  games.created_at AS played "
             "FROM games "
             "JOIN ladder_history ON games.ladder_history_id = ladder_history.id "
             "JOIN ladders ON ladder_history.ladder_id = ladders.id "
@@ -510,12 +533,105 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
             "LEFT JOIN qm_matches qmm ON qmm.id = games.qm_match_id "
             "LEFT JOIN qm_maps qmap ON qmm.qm_map_id = qmap.id "
             "LEFT JOIN maps maps ON maps.id = qmap.map_id "
-            "WHERE ladders.abbreviation = ? "
+            "WHERE ladders.abbreviation = ? AND games.created_at >= '2022-01-01' "
             "ORDER BY games.updated_at ASC "
-            )
+    );
+
+    // Games for ladder ra2 include ra2-new-maps and games playes between 2022-01-01 and 2022-05-01,
+    // which have ladder abbreviation YR AND a map name in double brackets. At this time, cncnet
+    // had an alternating ladder between ra2/yr, but games where tracked as yr
+
+    std::string ladderGamesRA2(
+            "SELECT "
+            "  games.id AS gameId, "
+            "  players.username AS playerUsername, "
+            "  ladders.abbreviation AS ladderAbbreviation, "
+            "  player_game_reports.won AS playerWon, "
+            "  player_game_reports.points, "
+            "  sides.name AS playerCountry, "
+            "  COALESCE(maps.name, games.scen) AS map, "
+            "  game_reports.duration, "
+            "  game_reports.fps, "
+            "  UNIX_TIMESTAMP(games.created_at) AS timestamp, "
+            "  games.created_at AS played "
+            "FROM games "
+            "JOIN ladder_history ON games.ladder_history_id = ladder_history.id "
+            "JOIN ladders ON ladder_history.ladder_id = ladders.id "
+            "JOIN game_reports ON game_reports.id = games.game_report_id "
+            "JOIN player_game_reports ON player_game_reports.game_report_id = games.game_report_id "
+            "JOIN players ON players.id = player_game_reports.player_id "
+            "JOIN stats2 ON stats2.id = player_game_reports.stats_id "
+            "LEFT JOIN sides ON sides.local_id = stats2.cty AND sides.ladder_id = ladders.id "
+            "LEFT JOIN qm_matches qmm ON qmm.id = games.qm_match_id "
+            "LEFT JOIN qm_maps qmap ON qmm.qm_map_id = qmap.id "
+            "LEFT JOIN maps maps ON maps.id = qmap.map_id "
+            "WHERE "
+            "( "
+            "  ladders.abbreviation IN ('ra2', 'ra2-new-maps') "
+            "  OR "
+            "  ( "
+            "     ladders.abbreviation = 'yr' "
+            "     AND games.created_at >= '2022-01-02' "
+            "     AND games.created_at < '2022-05-01' "
+            "     AND COALESCE(maps.name, games.scen) LIKE '\"%' "
+            "     AND COALESCE(maps.name, games.scen) LIKE '%\"' "
+            "   ) "
+            ") "
+            "ORDER BY games.updated_at ASC "
+    );
+
+    std::string ladderGamesYR(
+        "SELECT "
+        "  games.id AS gameId, "
+        "  players.username AS playerUsername, "
+        "  ladders.abbreviation AS ladderAbbreviation, "
+        "  player_game_reports.won AS playerWon, "
+        "  player_game_reports.points, "
+        "  sides.name AS playerCountry, "
+        "  COALESCE(maps.name, games.scen) AS map, "
+        "  game_reports.duration, "
+        "  game_reports.fps, "
+        "  UNIX_TIMESTAMP(games.created_at) AS timestamp, "
+        "  games.created_at AS played "
+        "FROM games "
+        "JOIN ladder_history ON games.ladder_history_id = ladder_history.id "
+        "JOIN ladders ON ladder_history.ladder_id = ladders.id "
+        "JOIN game_reports ON game_reports.id = games.game_report_id "
+        "JOIN player_game_reports ON player_game_reports.game_report_id = games.game_report_id "
+        "JOIN players ON players.id = player_game_reports.player_id "
+        "JOIN stats2 ON stats2.id = player_game_reports.stats_id "
+        "LEFT JOIN sides ON sides.local_id = stats2.cty AND sides.ladder_id = ladders.id "
+        "LEFT JOIN qm_matches qmm ON qmm.id = games.qm_match_id "
+        "LEFT JOIN qm_maps qmap ON qmm.qm_map_id = qmap.id "
+        "LEFT JOIN maps maps ON maps.id = qmap.map_id "
+        "WHERE "
+        "  ladders.abbreviation = 'yr' "
+        "  AND NOT ( "
+        "    games.created_at >= '2022-01-01' "
+        "    AND games.created_at < '2022-05-01' "
+        "    AND COALESCE(maps.name, games.scen) LIKE '\"%' "
+        "    AND COALESCE(maps.name, games.scen) LIKE '%\"' "
+        "  ) "
+        "ORDER BY games.updated_at ASC "
         );
 
-    statement->setString(1, _ladder);
+    std::string sqlStatement = ladderGames;
+    if (_gameMode == gamemodes::RedAlert2)
+    {
+        sqlStatement = ladderGamesRA2;
+    }
+    else if (_gameMode == gamemodes::YurisRevenge)
+    {
+        sqlStatement = ladderGamesYR;
+    }
+
+    std::unique_ptr<sql::PreparedStatement> statement(
+        _connection->prepareStatement(sqlStatement));
+
+    if (sqlStatement == ladderGames)
+    {
+        statement->setString(1, _ladder);
+    }
 
     std::unique_ptr<sql::ResultSet> result(statement->executeQuery());
 
@@ -531,6 +647,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
             std::string map = result->getString("map");
             std::pair<std::map<uint32_t, Game>::iterator, bool> game = games.emplace(gameId, Game(gameId, map, timestamp, fps, duration));
             game.first->second.setGameType(gametypes::Quickmatch);
+            game.first->second.setLadderAbbreviation(result->getString("ladderAbbreviation"));
         }
 
         auto it = games.find(gameId);
@@ -540,8 +657,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
 
         std::string playerName = result->getString("playerUsername");
 
-        // TODO: Consider points to determine winner/loser in undecided games.
-        // int32_t points = result->getInt("points");
+        int32_t points = result->getInt("points");
         bool won = result->getBoolean("playerWon");
         std::string playerCountry = result->getString("playerCountry");
 
@@ -552,7 +668,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
             continue;
         }
 
-        game->addPlayer(0, playerName, faction, won, 0.0, 0.0);
+        game->addPlayer(0, playerName, faction, won, points, 0.0, 0.0);
     }
 
     return games;

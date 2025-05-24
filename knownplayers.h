@@ -16,6 +16,7 @@ enum class KnownPlayers : uint32_t
     Lloyd = 17221,
     Qien = 17651,
     Mueller = 24830,
+    Lgnd = 35501,
     Snark = 36141,
     Diego = 42083,
     Root = 48373,

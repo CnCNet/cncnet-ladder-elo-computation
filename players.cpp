@@ -74,7 +74,7 @@ Player Players::operator[](uint32_t index) const
 
 /*!
  */
-void Players::add(const Player &player)
+void Players::add(const Player &player, const std::string &ladderAbbreviation)
 {
     if (_players.contains(player.userId()))
     {
@@ -85,7 +85,7 @@ void Players::add(const Player &player)
 
     for (const std::string &name : player.names())
     {
-        _nickToUserId[name] = player.userId();
+        _nickToUserId[ladderAbbreviation][name] = player.userId();
     }
 }
 
@@ -100,9 +100,14 @@ void Players::markDuplicates(uint32_t id, const std::set<uint32_t> &duplicates)
 
     for (auto it = _nickToUserId.begin(); it != _nickToUserId.end(); ++it)
     {
-        if (duplicates.contains(it->second))
+        std::map<std::string, uint32_t> &innerMap = it->second;
+
+        for (auto innerIt = innerMap.begin(); innerIt != innerMap.end(); ++innerIt)
         {
-            it->second = id;
+            if (duplicates.contains(innerIt->second))
+            {
+                innerIt->second = id;
+            }
         }
     }
 
@@ -123,10 +128,16 @@ bool Players::isTestAccount(uint32_t userId) const
 
 /*!
  */
-uint32_t Players::userId(const std::string &playerName) const
+uint32_t Players::userId(const std::string &playerName, const std::string &ladderName) const
 {
-    auto it = _nickToUserId.find(playerName);
-    return (it != _nickToUserId.end()) ? it->second : 0;
+    auto innerIt = _nickToUserId.find(ladderName);
+    if (innerIt == _nickToUserId.end())
+    {
+        return 0;
+    }
+
+    auto it = _nickToUserId.at(ladderName).find(playerName);
+    return (it != _nickToUserId.at(ladderName).end()) ? it->second : 0;
 }
 
 

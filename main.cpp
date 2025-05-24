@@ -51,7 +51,8 @@ int main(int argc, char* argv[])
     connection.addDuplicates( 3968, { 18319 });
     connection.addDuplicates(17651, { 40343, 43364, 44568 });
     connection.addDuplicates(19083, { 10459 });
-    connection.addDuplicates(33933, { 300 });
+    connection.addDuplicates(19548, { 68698 });
+    connection.addDuplicates(33933, { 300, 5878 });
     connection.addDuplicates(37077, { 58873, 59236, 59916, 68898, 68942, 71304 });
     connection.addDuplicates(40500, {    24,  1029, 68169 });
     connection.addDuplicates(44616, { 67416 });
@@ -62,9 +63,13 @@ int main(int argc, char* argv[])
     connection.addDuplicates(58766, { 58764, 66502 });
     connection.addDuplicates(59413, {   554, 61680 });
     connection.addDuplicates(60300, { 61757, 65104, 65875 });
+    connection.addDuplicates(62077, { 56736 });
     connection.addDuplicates(63398, { 63331 });
     connection.addDuplicates(67132, { 1179 });
     connection.addDuplicates(67596, { 36814 });
+    connection.addDuplicates(69904, { 73057, 75285, 78280});
+    connection.addDuplicates(60828, { 77657, 74819});
+    connection.removeDuplicate(56589);
 
     Log::info() << "Duplicates initiated.";
 
@@ -83,18 +88,20 @@ int main(int argc, char* argv[])
         for (uint32_t i = 0; i < game.playerCount(); i++)
         {
             std::string playerName = game.playerName(i);
-            uint32_t userId = players.userId(playerName);
+            uint32_t userId = players.userId(playerName, game.ladderAbbreviation());
 
             if (userId == 0)
             {
                 Log::debug() << "Player '" << playerName << "' is still unknown. Trying to find that player in the db.";
 
                 // Load the player first.
-                uint32_t temporaryUserId = connection.loadPlayer(playerName, players);
+                uint32_t temporaryUserId = connection.loadPlayer(playerName, players, game.ladderAbbreviation());
 
-                if (!connection.knownUser(temporaryUserId))
+                // Known users are for the current ladder only, but ra2 ladder might contain yr
+                // player from 02/2022 and 04/2022. It might also contains player from ra2-new-maps.
+                if (!connection.knownUser(temporaryUserId) && game.ladderAbbreviation() == options.ladderAbbreviation)
                 {
-                    Log::fatal() << "Did not expect player '" << playerName << "' (" << temporaryUserId << ") to have played a game.";
+                    Log::error() << "Did not expect player '" << playerName << "' (" << temporaryUserId << ") to have played a game.";
                     continue;
                 }
 
@@ -112,9 +119,9 @@ int main(int argc, char* argv[])
                         continue;
                     }
 
-                    if (!connection.loadPlayer(duplicate, players))
+                    if (!connection.loadPlayer(duplicate, players, game.ladderAbbreviation()))
                     {
-                        if (!connection.loadPlayerWithNoUser(duplicate, players))
+                        if (!connection.loadPlayerWithNoUser(duplicate, players, game.ladderAbbreviation()))
                         {
                             Log::info() << "User " << duplicate << " not part of table 'users' and thus cannot "
                                         << "be used as a base account.";
@@ -132,8 +139,9 @@ int main(int argc, char* argv[])
 
                 // Consider all duplicates and link all available player names to the base account.
                 players.markDuplicates(userId, duplicates);
-                Log::fatal(userId != players.userId(playerName)) << "Processing of duplicates went wrong ("
-                                                                 << userId << " != " << players.userId(playerName) << ").";
+                Log::fatal(userId != players.userId(playerName, game.ladderAbbreviation()))
+                    << "Processing of duplicates went wrong (" << userId
+                     << " != " << players.userId(playerName, game.ladderAbbreviation()) << ").";
             }
 
             game.setPlayer(i, userId);
@@ -164,6 +172,7 @@ int main(int argc, char* argv[])
     for (auto it = games.begin(); it != games.end(); ++it)
     {
         Game &game = it->second;
+        game.determineWinner();
 
         Log::debug() << "Processing game " << game << " (Run 2).";
 
@@ -229,7 +238,13 @@ int main(int argc, char* argv[])
 
         std::chrono::milliseconds timestamp = std::chrono::milliseconds(static_cast<uint64_t>(game.timestamp()) * 1000);
         std::chrono::system_clock::time_point currentTimePoint = std::chrono::system_clock::time_point(timestamp);
-        std::chrono::time_point<std::chrono::system_clock, std::chrono::days> date = floor<std::chrono::days>(currentTimePoint);
+
+        // Days will be switches at UTC+5. So CDT is the time zone for flipping days. The game time will still stay
+        // UTC, but for historical elo, peak rating, etc... the elo is taken at this specific time. For the locally
+        // generated elo list it was supposed to be UTC+1, but was UTC-1 by accident.
+        std::chrono::system_clock::time_point shiftedTime = currentTimePoint - std::chrono::hours(5);
+
+        std::chrono::time_point<std::chrono::system_clock, std::chrono::days> date = floor<std::chrono::days>(shiftedTime);
 
         std::chrono::year_month_day ymd = std::chrono::year_month_day{date};
         Log::verbose() << "Date of game " << game.id() << " is " << static_cast<int>(ymd.year()) << '-'
@@ -244,17 +259,21 @@ int main(int argc, char* argv[])
             game.setRatingAndDeviation(j, players[id].elo(faction), players[id].deviation(faction));
         }
 
+        // Date switch. Update players elo values.
+        if (date != currentDate && !validGames.empty())
+        {
+            Log::info() << "Apply update for " << stringtools::fromDate(date);
+            players.update();
+            // In constrast to the local elo list, the result are for the current day, which means that
+            // your peak rating is set to the day where you achieved it and not they day after, when it's visible
+            // for the first time.
+            players.apply(currentDate, true);
+            currentDate = date;
+        }
+
         for (uint32_t j = 0; j < game.playerCount(); j++)
         {
             players[game.userId(j)].processGame(game, j, false, players);
-        }
-
-        // Date switch. Update players elo values.
-        if (date != currentDate)
-        {
-            currentDate = date;
-            players.update();
-            players.apply(date, true);
         }
 
         // Update map stats.
@@ -277,11 +296,14 @@ int main(int argc, char* argv[])
     Log::info() << "Skipped " << skippedInvalid << " games due to unknown errors.";
 
     players.finalize();
-    players.exportActivePlayers(options.outputDirectory, options.gameMode);
-    players.exportBestOfAllTime(options.outputDirectory, options.gameMode);
-    players.exportMostDaysActive(options.outputDirectory, options.gameMode);
-    players.exportAlphabeticalOrder(options.outputDirectory, options.gameMode);
-    players.exportNewPlayers(options.outputDirectory, options.gameMode);
+    if (!options.dryRun)
+    {
+        players.exportActivePlayers(options.outputDirectory, options.gameMode);
+        players.exportBestOfAllTime(options.outputDirectory, options.gameMode);
+        players.exportMostDaysActive(options.outputDirectory, options.gameMode);
+        players.exportAlphabeticalOrder(options.outputDirectory, options.gameMode);
+        players.exportNewPlayers(options.outputDirectory, options.gameMode);
+    }
 
     for (auto it = ignoredMaps.begin(); it != ignoredMaps.end(); ++it)
     {
@@ -299,7 +321,7 @@ int main(int argc, char* argv[])
     Log::info() << "Processed " << validGames.size() << " games. About to finalize stats.";
 
     // Map stats and player details not suitable for 2v2 games.
-    if (gamemodes::playerCount(options.gameMode) == 2)
+    if (gamemodes::playerCount(options.gameMode) == 2 && options.exportFullStats)
     {
         stats.finalize(options.outputDirectory, players);
         stats.exportUpsets(options.outputDirectory, players);

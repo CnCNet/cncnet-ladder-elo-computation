@@ -30,10 +30,10 @@ public:
 
     //! Get the index of a player based on the quick match name.
     //! Returns 0 if no player is found.
-    uint32_t userId(const std::string &nick) const;
+    uint32_t userId(const std::string &nick, const std::string &ladderName) const;
 
     //! Add a players. Needs to have a valid user id.
-    void add(const Player &player);
+    void add(const Player &player, const std::string &ladderAbbreviation);
 
     //! Array subscript operetor.
     Player& operator[](uint32_t index);
@@ -87,8 +87,8 @@ private:
     std::map<uint32_t, Player> _players;
 
 private:
-    //! Get the user id from a nick.
-    std::map<std::string, uint32_t> _nickToUserId;
+    //! Get the user id from a nick. First key is the ladder.
+    std::map<std::string, std::map<std::string, uint32_t>> _nickToUserId;
 
     //! List of duplicates to each user id.
     std::map<uint32_t, uint32_t> _duplicates;

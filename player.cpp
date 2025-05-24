@@ -341,7 +341,7 @@ Rating::CalculationType Player::update()
 
             if (currentCalculationType != Rating::CalculationType::Normal && _ratings[i].currentCalculationType() == Rating::CalculationType::Normal)
             {
-                Log::info() << "Initial rating for player " << this->alias() << " and faction " << factions::name(factions::toFaction(i)) << " is [" << _ratings[i].pendingElo() << ", " << _ratings[i].deviation() << "].";
+                Log::fatal() << "Initial rating for player " << this->alias() << " and faction " << factions::name(factions::toFaction(i)) << " is [" << _ratings[i].pendingElo() << ", " << _ratings[i].deviation() << "].";
             }
             _updated[i] = true;
         }

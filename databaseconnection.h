@@ -30,6 +30,9 @@ public:
     //! Add duplicates manually.
     void addDuplicates(uint32_t userId, std::set<uint32_t> duplicates);
 
+    //! Remove a duplicate.
+    void removeDuplicate(uint32_t userId);
+
     //! Get the duplicates for a user id. Duplicated must have been initialized prior.
     std::set<uint32_t> getDuplicates(uint32_t userId);
 
@@ -43,15 +46,15 @@ public:
     std::set<uint32_t> getDeepDuplicateAccounts(uint32_t startUserId);
 
     //! Load a player from the database. Won't load duplicates.
-    uint32_t loadPlayer(const std::string &name, Players &players);
+    uint32_t loadPlayer(const std::string &name, Players &players, const std::string &ladderAbbreviation);
 
     //! Load a player from the database by its user_id.
-    bool loadPlayer(uint32_t userId, Players &players);
+    bool loadPlayer(uint32_t userId, Players &players, const std::string &ladderAbbreviation);
 
     //! Load a player from the database, who does not have an account anymore. This is probably
     //! a duplicate, that has been deleted. We still need all the player names assigned to the
     //! user id.
-    bool loadPlayerWithNoUser(uint32_t userId, Players &players);
+    bool loadPlayerWithNoUser(uint32_t userId, Players &players, const std::string &ladderAbbreviation);
 
     //! Add all recent games from the database. The player id won't be set for the games.
     std::map<uint32_t, Game> fetchGames();

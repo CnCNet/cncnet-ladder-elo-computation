@@ -22,6 +22,7 @@ public:
         std::string playerName;
         factions::Faction faction;
         bool hasWon;
+        int points;
         double elo;
         double deviation;
     };
@@ -35,8 +36,11 @@ public:
     //! Get the number of players who participated in this game.
     uint32_t playerCount() const;
 
+    //! Determine the winners based on points if no one of the participants has won.
+    void determineWinner();
+
     //! Add a player to the game.
-    void addPlayer(uint32_t index, const std::string &playerName, factions::Faction faction, bool hasWon, double elo, double deviation);
+    void addPlayer(uint32_t index, const std::string &playerName, factions::Faction faction, bool hasWon, int points, double elo, double deviation);
 
     //! Result of a specific player. Index has to be 1 or 2.
     double result(uint32_t index) const;
@@ -87,6 +91,12 @@ public:
     //! Get a players faction. 0 is player 1, 1 is player 2.
     factions::Faction faction(uint32_t index) const;
 
+    //! Set the ladder abbreviation for this game.
+    void setLadderAbbreviation(const std::string &ladderAbbreviation);
+
+    //! Get the ladder abbreviation for this game.
+    std::string ladderAbbreviation() const;
+
     //! Set the map for this game.
     void setMap(uint32_t mapIndex);
 
@@ -110,12 +120,6 @@ public:
 
     //! Check if the game ended in a disconnect.
     bool wasDisconnected() const;
-
-    //! Wash or unwash a game.
-    void setIsWashed(bool washed);
-
-    //! Check if the game has been washed.
-    bool isWashed() const;
 
     //! Is this a game against a bot?
     bool isBot() const;
@@ -141,6 +145,9 @@ public:
     //! Get the date from the game.
     std::chrono::year_month_day date() const;
 
+    //! Get the exact timestamp of the game.
+    //std::tuple<std::chrono::year_month_day, std::chrono::hh_mm_ss<std::chrono::seconds>> dateTime() const;
+
     //! Check if the game is valid.
     bool isValid() const;
 
@@ -162,7 +169,8 @@ public:
     //! Get index of both opponents in a 2v2 game.
     std::pair<uint32_t, uint32_t> opponentsIndices(uint32_t index) const;
 
-    //!
+    //! The faction result. Winning faction gets written in uppercase, so
+    //! this function return something like 'avY' or 'Sva'.
     std::string factionResult(bool winnerFirst = false) const;
 
     //! Check if number of winning and losing players are equal.
@@ -171,7 +179,7 @@ public:
     //! Outputs the rating in Glicko-1 format.
     friend inline std::ostream& operator<<(std::ostream& os, const Game& game)
     {
-        os << "["
+        /*os << "["
            << game.id()
            << "] "
            << std::setfill('0')
@@ -180,6 +188,25 @@ public:
            << std::setw(2) << unsigned(game.date().month()) << '-'
            << std::setw(2) << unsigned(game.date().day())
            << " ";
+        */
+        std::chrono::sys_seconds tp{std::chrono::seconds{game._timestamp}};
+        std::chrono::sys_days days = floor<std::chrono::days>(tp);
+        std::chrono::year_month_day ymd{days};
+        std::chrono::hh_mm_ss time{tp - days};
+
+        os << "["
+           << game.id()
+           << "] "
+           << std::setfill('0')
+           << std::setw(4) << int(ymd.year()) << '-'
+           << std::setw(2) << unsigned(ymd.month()) << '-'
+           << std::setw(2) << unsigned(ymd.day()) << '@'
+           << std::setw(2) << time.hours().count() << ':'
+           << std::setw(2) << time.minutes().count() << '.'
+           << std::setw(2) << time.seconds().count() << ' ';
+
+
+
         if (game._participants.size() == 2)
         {
             const Participant &p0 = game._participants[0];
@@ -245,6 +272,12 @@ private:
 
     //! Map name.
     std::string _mapName;
+
+    //! The ladder abbreviation. This is usually the ladder we are processing, but it might
+    //! differ. Some games on the yr-ladder are actual ra2 games. On top of that, ra2-new-maps
+    //! are integrated into ra2 and we need to know which ladder to ask if the player name
+    //! has to be resolved.
+    std::string _ladderAbbreviation;
 
     //! Number of seconds since 1/1/1970 UTC. Might deviate by a couple of hours for
     //! tournament games, but won't affect rating, because games are submitted in

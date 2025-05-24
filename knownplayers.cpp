@@ -61,6 +61,20 @@ std::pair<double, double> initialRatingAndDeviation(uint32_t userId, gamemodes::
             initialDeviation = 200.0;
         }
     }
+    else if (gameMode == gamemodes::RedAlert2)
+    {
+        if (contains(std::initializer_list<KnownPlayers>{ KnownPlayers::Latof, KnownPlayers::Qien, KnownPlayers::Marko, KnownPlayers::Kwos, KnownPlayers::Lgnd }, static_cast<KnownPlayers>(userId)))
+        {
+            initialRating = 1650.0;
+            initialDeviation = 300.0;
+        }
+
+        if (contains(std::initializer_list<KnownPlayers>{ KnownPlayers::Mueller }, static_cast<KnownPlayers>(userId)))
+        {
+            initialRating = 800.0;
+            initialDeviation = 250.0;
+        }
+    }
     else
     {
         if (contains(std::initializer_list<KnownPlayers>{ KnownPlayers::Mueller }, static_cast<KnownPlayers>(userId)))

@@ -20,6 +20,8 @@ public:
     std::filesystem::path outputDirectory;
     std::string host;
     uint32_t port;
+    bool dryRun;
+    bool exportFullStats;
 
 private:
     int _returnValue = 0;

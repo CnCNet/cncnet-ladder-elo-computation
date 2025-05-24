@@ -14,6 +14,8 @@ Options::Options(int argc, char* argv[])
 
     options.add_options()
         ("h,help", "Show help.")
+        ("d,dry-run", "Run without writing any results (test mode).")
+        ("s,statistics", "Export additional player and map statistics.")
         ("l,log-level", "Set the log level (debug, verbose, info, warning, error, critical, fatal).",
          cxxopts::value<std::string>()->default_value("verbose"))
         ("m,gamemode", "Set the game mode. Every available ladder abbreviation is valid.",
@@ -64,17 +66,24 @@ Options::Options(int argc, char* argv[])
     if (!result.count("gamemode"))
     {
         std::cout << "Missing game mode. Use option --gamemode to specify. Fully supported game "
-                     "modes are blitz, ra2, yr, and blitz-2v2, but other might work, too.";
+                     "modes are blitz, ra2, yr, and blitz-2v2, but other might work, too." << std::endl;
         setQuitWithErrorCode(1);
     }
     else
     {
         ladderAbbreviation = result["gamemode"].as<std::string>();
+        if (ladderAbbreviation == "ra2-new-maps")
+        {
+            std::cout << "Ladder 'ra2-new-maps' is usually integrated in the ra2 ladder, but computing "
+                      << " elo for ra2-new-maps will work." << std::endl;
+        }
         gameMode = gamemodes::toGameMode(ladderAbbreviation);
     }
 
     host = result["host"].as<std::string>();
     port = result["port"].as<uint32_t>();
+    dryRun = result["dry-run"].as<bool>();
+    exportFullStats = result["statistics"].as<bool>();
 }
 
 /*!
