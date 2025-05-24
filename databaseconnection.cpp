@@ -606,6 +606,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
         "LEFT JOIN maps maps ON maps.id = qmap.map_id "
         "WHERE "
         "  ladders.abbreviation = 'yr' "
+        "  AND games.created_at >= '2022-01-01' "
         "  AND NOT ( "
         "    games.created_at >= '2022-01-01' "
         "    AND games.created_at < '2022-05-01' "

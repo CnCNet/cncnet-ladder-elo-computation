@@ -225,7 +225,7 @@ public:
     const Probabilities& mapStats(factions::Setup setup, int mapIndex) const;
 
     //! Get historical elo values for the given faction.
-    std::map<std::chrono::year_month_day, std::pair<double, double>> historicalElo(factions::Faction faction) const;
+    std::map<uint32_t, std::pair<double, double> > historicalElo(factions::Faction faction) const;
 
     //! Check lexical order. Considers brackets.
     bool lowerLexicalOrder(const Player &other) const;
@@ -304,8 +304,9 @@ private:
     std::array<std::vector<std::chrono::year_month_day>, factions::count()> _factionStatusList;
 
     //! Elo by date for each faction. First value of the pair is the elo, second
-    //! the deviation.
-    std::map<std::chrono::year_month_day, std::array<std::pair<double, double>, factions::count()>> _eloByDate;
+    //! the deviation. Key using std::chrono::year_month_day is not working properly.
+    //! That's why its converted to uint32_t.
+    std::map<uint32_t, std::array<std::pair<double, double>, factions::count()>> _eloByDate;
 
     //! List of highest rated victories. Stripped down to 20 elements max.
     std::set<HighestRatedVictories> _hightestRatedVictories;

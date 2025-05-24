@@ -445,7 +445,12 @@ void Player::apply(std::chrono::year_month_day date, bool decay)
             }
         }
 
-        _eloByDate[date][i] = std::pair<double, double>(result, deviation);
+        auto y = static_cast<int>(date.year());
+        auto m = static_cast<unsigned>(static_cast<unsigned>(date.month()));
+        auto d = static_cast<unsigned>(static_cast<unsigned>(date.day()));
+        uint32_t intDate = static_cast<uint32_t>(y) * 10000 + m * 100 + d;
+
+        _eloByDate[intDate][i] = std::pair<double, double>(result, deviation);
     }
 }
 
@@ -921,13 +926,13 @@ const Probabilities& Player::mapStats(factions::Setup setup, int mapIndex) const
 
 /*!
  */
-std::map<std::chrono::year_month_day, std::pair<double, double>> Player::historicalElo(factions::Faction faction) const
+std::map<uint32_t, std::pair<double, double>> Player::historicalElo(factions::Faction faction) const
 {
-    std::map<std::chrono::year_month_day, std::pair<double, double>> result;
+    std::map<uint32_t, std::pair<double, double>> result;
 
     for (auto it = _eloByDate.begin(); it != _eloByDate.end(); ++it)
     {
-        const std::chrono::year_month_day &date = it->first;
+        uint32_t date = it->first;
         const std::array<std::pair<double, double>, factions::count()> &ratingAndDeviation = it->second;
         if (ratingAndDeviation[faction].first > 0.0)
         {

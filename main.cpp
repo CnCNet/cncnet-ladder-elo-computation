@@ -59,7 +59,7 @@ int main(int argc, char* argv[])
     connection.addDuplicates(47880, { 71623 });
     connection.addDuplicates(53313, { 59298, 76620 });
     connection.addDuplicates(54423, { 20498 });
-    connection.addDuplicates(55626, { 73649 });
+    connection.addDuplicates(55626, { 73649 }); // Also 39160, but auto-detected
     connection.addDuplicates(58766, { 58764, 66502 });
     connection.addDuplicates(59413, {   554, 61680 });
     connection.addDuplicates(60300, { 61757, 65104, 65875 });
@@ -174,7 +174,7 @@ int main(int argc, char* argv[])
         Game &game = it->second;
         game.determineWinner();
 
-        Log::debug() << "Processing game " << game << " (Run 2).";
+        Log::verbose() << "Processing game " << game << " (Run 2).";
 
         uint32_t duration = game.duration();
         gametypes::GameType type = game.gameType();
@@ -234,7 +234,7 @@ int main(int argc, char* argv[])
             }
         }
 
-        Log::verbose() << "Timestamp of game " << game.id() << " is " << game.timestamp() << ".";
+        Log::debug() << "UNIX timestamp of game " << game.id() << " is " << game.timestamp() << ".";
 
         std::chrono::milliseconds timestamp = std::chrono::milliseconds(static_cast<uint64_t>(game.timestamp()) * 1000);
         std::chrono::system_clock::time_point currentTimePoint = std::chrono::system_clock::time_point(timestamp);
@@ -247,8 +247,8 @@ int main(int argc, char* argv[])
         std::chrono::time_point<std::chrono::system_clock, std::chrono::days> date = floor<std::chrono::days>(shiftedTime);
 
         std::chrono::year_month_day ymd = std::chrono::year_month_day{date};
-        Log::verbose() << "Date of game " << game.id() << " is " << static_cast<int>(ymd.year()) << '-'
-                       << static_cast<unsigned>(ymd.month()) << '-' << static_cast<unsigned>(ymd.day());
+        Log::verbose() << "Shifted time of game " << game.id() << " from "
+                       << stringtools::fromDate(game.date()) << " to " << stringtools::fromDate(ymd) << ".";
 
         lastDate = date;
 

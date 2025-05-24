@@ -798,7 +798,8 @@ void Players::exportPlayerDetails(
 
         for (int i = 0; i < factions::count(); i++)
         {
-            std::map<std::chrono::year_month_day, std::pair<double, double>> historicalElo = player.historicalElo(factions::toFaction(i));
+            std::map<uint32_t, std::pair<double, double>> historicalElo = player.historicalElo(factions::toFaction(i));
+
             if (!historicalElo.empty())
             {
                 json jHistoricalElo = json::object();
@@ -806,8 +807,12 @@ void Players::exportPlayerDetails(
                 json jHistoricalValues = json::array();
                 for (auto it = historicalElo.begin(); it != historicalElo.end(); ++it)
                 {
+                    int y = it->first / 10000;
+                    unsigned m = (it->first / 100) % 100;
+                    unsigned d = it->first % 100;
+                    std::chrono::year_month_day ymd = std::chrono::year{y} / std::chrono::month{m} / std::chrono::day{d};
                     json jHistoricValue = json::object();
-                    jHistoricValue["date"] = stringtools::fromDate(it->first);
+                    jHistoricValue["date"] = stringtools::fromDate(ymd);
                     jHistoricValue["rating"] = it->second.first;
                     jHistoricValue["deviation"] = it->second.second;
                     jHistoricalValues.push_back(jHistoricValue);
