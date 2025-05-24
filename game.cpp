@@ -58,6 +58,7 @@ void Game::determineWinner()
     {
         result += (participant.points > 0) ? 1 : -1;
         participant.hasWon = participant.points > 0;
+        Log::info() << "  Trying to determine winner. Player '" << participant.playerName << "' got " << participant.points << " points.";
     }
 
     Log::warning(result != 0) << "Unable to determine winners in game " << _id << ". This game will probably be invalid.";
