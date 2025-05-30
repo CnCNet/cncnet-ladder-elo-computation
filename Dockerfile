@@ -11,27 +11,24 @@ RUN apt-get update && apt-get install -y \
     g++ \
     build-essential
 
-# Copy your source code
-WORKDIR /app
-COPY . .
+COPY . /app
 
-RUN mkdir build && cd build
+WORKDIR /app/build
 
-# Build your application (adjust this to your project)
+# Build your application
 RUN cmake -G Ninja /app && ninja -j $(( $(nproc) / 2 ))
 
 # -------- Runtime Stage --------
-FROM alpine:latest
+FROM debian:bookworm-slim
 
-# Install runtime dependencies
-COPY --from=build /usr/lib/x86_64-linux-gnu/libmysqlcppconn.so.7 /usr/lib/libmysqlcppconn.so.7
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libmysqlcppconn-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy the built binary from the build stage
-COPY --from=build /app/build/elogen /usr/local/bin/elogen
-
-RUN chmod +x /usr/local/bin/elogen
-
-RUN ln -s /usr/lib/libmysqlcppconn.so.7 /usr/lib/libmysqlcppconn.so
+# Set workdir and copy the built binary
+WORKDIR /app
+COPY --from=build /app/build/elogen /app/elogen
 
 # Run it
-ENTRYPOINT ["/usr/local/bin/elogen"]
+ENTRYPOINT ["/app/elogen"]
