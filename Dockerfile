@@ -1,20 +1,37 @@
-FROM ubuntu:22.04
+# -------- Build Stage --------
+FROM ubuntu:22.04 AS build
 
-ENV DEBIAN_FRONTEND=noninteractive
-
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
-    build-essential \
     git \
     cmake \
     ninja-build \
     libmysqlcppconn-dev \
-    && rm -rf /var/lib/apt/lists/*
+    g++ \
+    build-essential
 
-RUN git clone https://github.com/CnCNet/cncnet-ladder-elo-computation.git /repos/cncnet-ladder-elo-computation && \
-    mkdir build && \
-    cd build && \
-    cmake -G Ninja /repos/cncnet-ladder-elo-computation && \
-    ninja -j $(( $(nproc) / 2 ))
+# Copy your source code
+WORKDIR /app
+COPY . .
 
-WORKDIR /build
+RUN mkdir build && cd build
+
+# Build your application (adjust this to your project)
+RUN cmake -G Ninja /app && ninja -j $(( $(nproc) / 2 ))
+
+# -------- Runtime Stage --------
+FROM alpine:latest
+
+# Install runtime dependencies
+COPY --from=build /usr/lib/x86_64-linux-gnu/libmysqlcppconn.so.7 /usr/lib/libmysqlcppconn.so.7
+
+# Copy the built binary from the build stage
+COPY --from=build /app/build/elogen /usr/local/bin/elogen
+
+RUN chmod +x /usr/local/bin/elogen
+
+RUN ln -s /usr/lib/libmysqlcppconn.so.7 /usr/lib/libmysqlcppconn.so
+
+# Run it
+ENTRYPOINT ["/usr/local/bin/elogen"]
