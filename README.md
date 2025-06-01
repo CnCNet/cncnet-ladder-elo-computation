@@ -134,6 +134,71 @@ To find the optimal _p_, we ran many simulations, updating ELOs daily and compar
 
 The sweet spot is _p_ = **1.11**, giving reasonably good results in line with expectations.
 
+## Usage on CnCNet
+
+Since ELO computation is processed in batches - to ensure higher accuracy - rather than after each game, this application needs to run once per day. The "ELO day" ends at UTC+5 for all players, so the best time to run it is between UTC+5 and UTC+6.
+
+During the build of the Docker container, this repository is cloned and the app is compiled.
+
+### Build the container:
+
+```bash
+docker build -t elogenerator .
+```
+
+If packages cannot be fetched, change
+
+  RUN apt-get update && apt-get install -y \
+
+to
+
+  RUN apt-get -o Acquire::ForceIPv4=true update && apt-get -o Acquire::ForceIPv4=true install -y \
+
+in the `Dockerfile`.
+
+When running the container, Docker must be provided with the path to the directory containing the rating files.
+This is usually:
+
+`cncnet-ladder-api/cncnet-api/storage/app/rating`
+
+The ELO generator will use this directory as **output directory**.
+
+You can provide the environment variables `MYSQL_HOST`, `MYSQL_PASSWORD`, `MYSQL_USER`, and `MYSQL_PORT` - but these can also be passed as command-line arguments to the ELO generator app.
+
+### Running the container:
+
+**Command-line parameters:**
+
+  * `-H` or `--host`: MySql host name, will be preferred over environment variable MYSQL_HOST
+  * `-u` or `--user`: MySql user, will be preferred over environment variable MYSQL_USER
+  * `-P` or `--password`: MySql password, will be preferred over environment variable MYSQL_PASSWORD
+  * `-p` or `--port`: MySql port, will be preferred over environment variable MYSQL_PORT
+  * `-m` or `--gamemode`: blitz, blitz-2v2, ra2, ra and yr are tested, other might work too. ra2 will include ra2-new-maps
+  * `-o` or `--output-dir`: Location where all JSON files are written. Needs to align with the directory provided with the docker container
+  * `-l` or `--log-level`: Defaults to verbose, but if files get too large, info or warning might be the better choice.
+  * `-t` or `--tournament-games`: File with additional tournament games. There is one for blitz.
+  * `-s` or `--statistics`: Will create individual statistics for each player. Quite fast, but will eat up a lot of disk storage.
+
+
+### Example 1:
+
+```bash
+docker run -it --add-host=host.docker.internal:host-gateway -e MYSQL_PASSWORD=pass -e MYSQL_USER=user -v /home/cncnet/cncnet-ladder-api/cncnet-api/storage/app/rating:/data elogenerator -H host.docker.internal -P 3306 --log-level info -o /data -m ra2
+```
+
+This will generate ELO for `ra2` and write the JSON files to `/home/cncnet/cncnet-ladder-api/cncnet-api/storage/app/rating`.
+It connects to MySQL at the given host and port. User and password are provided via environment variables.
+
+
+### Example 2:
+
+```bash
+docker run -it --add-host=host.docker.internal:host-gateway -e MYSQL_HOST=host.docker.internal -e MYSQL_PORT=3307 -e MYSQL_PASSWORD=pass -e MYSQL_USER=user -v /home/cncnet/cncnet-ladder-api/cncnet-api/storage/app/rating:/data elogenerator -o /data -m blitz --tournament-games blitz_ra2_worldseries.json
+```
+
+This will generate ELO for blitz, using environment variables only. It also includes the specified tournament game file. Since a tournament file is only used for blitz and not updated anymore, the layout of a tournament won't be explained here. Just throw `gameoverlay.cpp` at an AI and it will provide you an example JSON.
+
+
 ## FAQ
 
 _This section is still being created._
@@ -176,58 +241,3 @@ But the **second** loss is much more significant. That result suggests that your
 
 The list is updated once per day, with the daily cutoff at UTC+5.
 Your rating — as shown in the all-time leaderboard — reflects your status at the end of the previous day based on that time.
-
-## Usage on CnCNet
-
-Since ELO computation is processed in batches - to ensure higher accuracy - rather than after each game, this application needs to run once per day.
-The "ELO day" ends at UTC+5 for all players, so the best time to run it is between UTC+5 and UTC+6.
-
-During the build of the Docker container, this repository is cloned and the app is compiled.
-
-### Build the container:
-
-```bash
-docker build -t elogenerator .
-```
-
-When running the container, Docker must be provided with the path to the directory containing the rating files.
-This is usually:
-
-`cncnet-ladder-api/cncnet-api/storage/app/rating`
-
-The ELO generator will use this directory as **output directory**.
-
-You can provide the environment variables `MYSQL_HOST`, `MYSQL_PASSWORD`, `MYSQL_USER`, and `MYSQL_PORT` - but these can also be passed as command-line arguments to the ELO generator app.
-
-### Running the container:
-
-**Command-line parameters:**
-
-  * `-H` or `--host`: MySql host name, will be preferred over environment variable MYSQL_HOST
-  * `-u` or `--user`: MySql user, will be preferred over environment variable MYSQL_USER
-  * `-P` or `--password`: MySql password, will be preferred over environment variable MYSQL_PASSWORD
-  * `-p` or `--port`: MySql port, will be preferred over environment variable MYSQL_PORT
-  * `-m` or `--gamemode`: blitz, blitz-2v2, ra2, ra and yr are tested, other might work too. ra2 will include ra2-new-maps
-  * `-o` or `--output-dir`: Location where all JSON files are written. Needs to align with the directory provided with the docker container
-  * `-l` or `--log-level`: Defaults to verbose, but if files get too large, info or warning might be the better choice.
-  * `-t` or `--tournament-games`: File with additional tournament games. There is one for blitz.
-  * `-s` or `--statistics`: Will create individual statistics for each player. Quite fast, but will eat up a lot of disk storage.
-
-
-### Example 1:
-
-```bash
-docker run -it --add-host=host.docker.internal:host-gateway -e MYSQL_PASSWORD=pass -e MYSQL_USER=user -v /home/cncnet/cncnet-ladder-api/cncnet-api/storage/app/rating:/data elogenerator /bin/bash -c "cd /build && ./elogen -H host.docker.internal -P 3307 --log-level info -o /data -m ra2"
-```
-
-This will generate ELO for `ra2` and write the JSON files to `/home/cncnet/cncnet-ladder-api/cncnet-api/storage/app/rating`.
-It connects to MySQL at the given host and port. User and password are provided via environment variables.
-
-
-### Example 2:
-
-```bash
-docker run -it --add-host=host.docker.internal:host-gateway -e MYSQL_HOST=host.docker.internal -e MYSQL_PORT=3307 -e MYSQL_PASSWORD=pass -e MYSQL_USER=user -v /home/cncnet/cncnet-ladder-api/cncnet-api/storage/app/rating:/data elogenerator /bin/bash -c "cd /build && ./elogen -o /data -m blitz --tournament-games /repos/cncnet-ladder-elo-computation/data/blitz_ra2_worldseries.json"
-```
-
-This will generate ELO for blitz, using environment variables only. It also includes the specified tournament game file from the repository.
