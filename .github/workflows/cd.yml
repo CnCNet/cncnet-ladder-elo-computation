@@ -14,6 +14,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        target: [app, cron]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,7 +25,8 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: |
+            ghcr.io/${{ github.repository_owner }}/cncnet-ladder-elo-computation-${{ matrix.target }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -37,11 +41,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push base image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
+          target: ${{ matrix.target }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
