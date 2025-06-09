@@ -51,4 +51,4 @@ RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
 USER root
 
 # Start cron in the foreground
-CMD ["cron", "-f"]
+ENTRYPOINT ["cron", "-f", "-L", "2"]
