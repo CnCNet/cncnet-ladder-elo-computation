@@ -50,5 +50,8 @@ RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
 # Switch back to root to run cron
 USER root
 
-# Start cron in the foreground
-ENTRYPOINT ["cron", "-f", "-L", "2"]
+COPY entrypoint-cron.sh /entrypoint-cron.sh
+RUN chmod +x /entrypoint-cron.sh
+
+# Copies crontab and starts cron in the foreground
+ENTRYPOINT ["/entrypoint-cron.sh"]
