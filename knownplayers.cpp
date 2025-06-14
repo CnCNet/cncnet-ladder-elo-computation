@@ -28,7 +28,7 @@ std::pair<double, double> initialRatingAndDeviation(uint32_t userId, gamemodes::
 
     // Assigned some starting values to a couple of players. These values WILL NOT
     // change the final result in terms of gaps, but just adjust the rating of
-    // everyone. If changes to the elo systems are made, we want players to keep
+    // everyone. If changes to the ELO systems are made, we want players to keep
     // their rating, because it might look strange if the rating changes without
     // having played. Several changes have been made over time and these values
     // will just keep the ratings stable. Again: this is not a rating boost or

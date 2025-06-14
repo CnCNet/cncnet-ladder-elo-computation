@@ -213,7 +213,7 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
 
     std::string yuri = (gameMode == gamemodes::YurisRevenge) ? ", yuri" : "";
 
-    data["description"] = "Active players sorted by elo";
+    data["description"] = "Active players sorted by ELO";
 
     data["columns"] = json::array({
         { { "index", 0 }, { "header", "#" } , { "name", "rank" } },

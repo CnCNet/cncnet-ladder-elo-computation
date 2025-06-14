@@ -10,7 +10,7 @@
  */
 Options::Options(int argc, char* argv[])
 {
-    cxxopts::Options options("elogen", "Elo Generator for CnCNet ladder games");
+    cxxopts::Options options("elogen", "ELO Generator for CnCNet ladder games");
 
     options.add_options()
         ("h,help", "Show help.")

@@ -342,7 +342,7 @@ Rating::CalculationType Player::update()
 
             if (currentCalculationType == Rating::CalculationType::Initial || currentCalculationType == Rating::CalculationType::SingleStep)
             {
-                Log::info() << "Applied improved initial elo calculation to player " << this->alias() << ".";
+                Log::info() << "Applied improved initial ELO calculation to player " << this->alias() << ".";
             }
 
             if (currentCalculationType != Rating::CalculationType::Normal && _ratings[i].currentCalculationType() == Rating::CalculationType::Normal)

@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
 
     Log::info();
     Log::addTimestampAndLogLevel(true);
-    Log::info() << "Starting elo computation.";
+    Log::info() << "Starting ELO computation.";
     Log::info() << "Initiating duplicates.";
     connection.initDuplicates();
 
@@ -203,7 +203,7 @@ int main(int argc, char* argv[])
             continue;
         }
 
-        // Ignore games on non-elo maps in blitz.
+        // Ignore games on non-ELO maps in blitz.
         if (options.gameMode == gamemodes::Blitz && blitzmap::toIndex(mapName) == -1)
         {
             if (!ignoredMaps.contains(mapName))
@@ -270,9 +270,9 @@ int main(int argc, char* argv[])
         std::chrono::milliseconds timestamp = std::chrono::milliseconds(static_cast<uint64_t>(game->timestamp() + game->duration()) * 1000);
         std::chrono::system_clock::time_point currentTimePoint = std::chrono::system_clock::time_point(timestamp);
 
-        // Days will be switches at UTC+5. So CDT is the time zone for flipping days. The game time will still stay
-        // UTC, but for historical elo, peak rating, etc... the elo is taken at this specific time. For the locally
-        // generated elo list it was supposed to be UTC+1, but was UTC-1 by accident.
+        // Days will be switches at UTC+5. So EST is the time zone for flipping days. The game time will still stay
+        // UTC, but for historical ELO, peak rating, etc... the ELO is taken at this specific time. For the locally
+        // generated ELO list it was supposed to be UTC+1, but was UTC-1 by accident.
         std::chrono::system_clock::time_point shiftedTime = currentTimePoint - std::chrono::hours(5);
         std::chrono::time_point<std::chrono::system_clock, std::chrono::days> date = floor<std::chrono::days>(shiftedTime);
 
@@ -290,12 +290,12 @@ int main(int argc, char* argv[])
 
         Log::verbose() << "Processing game " << *game << " (Run 3).";
 
-        // Date switch. Update players elo values.
+        // Date switch. Update players ELO values.
         if (date != currentDate && !validGames.empty())
         {
             Log::info() << "Apply update for " << stringtools::fromDate(date);
             players.update();
-            // In constrast to the local elo list, the result are for the current day, which means that
+            // In constrast to the local ELO list, the result are for the current day, which means that
             // your peak rating is set to the day where you achieved it and not they day after, when it's visible
             // for the first time.
             players.apply(currentDate, true);

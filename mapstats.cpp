@@ -612,7 +612,7 @@ void MapStats::exportUpsets(
         { { "index", 4 }, { "header", "" } , { "name", "faction_loser" }, { "info", "Losers faction." } },
         { { "index", 5 }, { "header", "Loser" } , { "name", "loser" } },
         { { "index", 6 }, { "header", "Map" } , { "name", "map" } },
-        { { "index", 7 }, { "header", "Diff" } , { "name", "rating_difference" }, { "info", "Difference in elo rating."} }
+        { { "index", 7 }, { "header", "Diff" } , { "name", "rating_difference" }, { "info", "Difference in ELO rating."} }
     });
 
     json jUpsets = json::array();

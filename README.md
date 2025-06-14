@@ -203,11 +203,19 @@ This will generate ELO for blitz, using environment variables only. It also incl
 
 _This section is still being created._
 
+### Why do I have several ratings? What's my actual ELO?
+
+You have **separate ratings for each faction** - Soviet, Allied, and (if available) Yuri — **plus an overall rating** that includes all your games, regardless of faction. This separation helps track your true skill with each faction, since performance can vary significantly depending on what you play.
+
+Your actual ELO is the **highest of these ratings** - but only if its deviation is low enough to qualify you as an active player. If not, the next-highest active rating will be shown instead.
+
+---
+
 ### What is the deviation?
 
 The **deviation** indicates how accurate or uncertain your rating is. You’ll appear on the list of **active players** if your deviation drops below **60–70** (depending on your rating), and you'll be removed from the list if it rises above around **100**.
 
-To lower your deviation, you need to provide **new information** about your skill level. Continuously beating much weaker opponents (which might boost your rating in other systems) doesn't help here — it's not new information. For example, you’re expected to win more than **99%** of the time against someone **1000 ELO** below you. So winning 20 games in a row against such an opponent won’t improve your rating — it might even **increase** your deviation due to the lack of meaningful data.
+To lower your deviation, you need to provide **new information** about your skill level. Continuously beating much weaker opponents (which might boost your rating in other systems) doesn't help here - it's not new information. For example, you’re expected to win more than **99%** of the time against someone **1000 ELO** below you. So winning 20 games in a row against such an opponent won’t improve your rating - it might even **increase** your deviation due to the lack of meaningful data.
 
 That’s one reason why Glicko-2 is hard to exploit. The best way to reduce your deviation is to play a variety of opponents **close to your skill level**.
 
@@ -231,13 +239,52 @@ If you play **50 games a day for a week**, your rating will effectively reset it
 
 ### How bad is a loss against a much weaker opponent?
 
-A single loss isn’t a big deal — even if your opponent is far below you in rating. The expected win rate is never 100%, no matter how large the ELO gap is. So if you lose one game against someone **1000 ELO** below you, it's likely just the one game out of 100 that you were expected to lose anyway.
+A single loss isn’t a big deal - even if your opponent is far below you in rating. The expected win rate is never 100%, no matter how large the ELO gap is. So if you lose one game against someone **1000 ELO** below you, it's likely just the one game out of 100 that you were expected to lose anyway.
 
-But the **second** loss is much more significant. That result suggests that your strength may have been overestimated, and the system will start adjusting your rating accordingly.
+In **traditional ELO systems**, a loss like that would often cause a **big drop**, which you'd have to grind back through many small wins. But Glicko-2 works differently: after an unexpected result, it usually adjusts your **deviation** first - not your rating. That means the system becomes less certain about your skill, but doesn’t immediately assume you've gotten worse.
+
+Only if you continue to underperform - say, by losing a second or third time - does the system start lowering your rating. This makes Glicko-2 less punishing for flukes and more accurate.
 
 ---
 
+### How can I improve my rating?
+
+The short answer: **Play well.**
+
+One thing to avoid: **going on tilt**. A string of unexpected losses - particularly against much weaker players will significantly drop your rating. Glicko-2 reacts strongly to sudden instability, unlike traditional ELO systems which only consider win/loss and not confidence.
+
+**Consistency beats streakiness.** Glicko-2 favors players who stay sharp.
+
 ### How often is the list updated?
 
-The list is updated once per day, with the daily cutoff at UTC+5.
-Your rating — as shown in the all-time leaderboard — reflects your status at the end of the previous day based on that time.
+The rankings for **Blitz 2v2**, **YR**, and **RA2** are updated once per day, with a daily cutoff at UTC+5 (which corresponds to **midnight EST**). Your rating - as shown on the all-time leaderboard - reflects your status at the end of the previous day, based on that cutoff.
+
+Due to lower activity, **Blitz** and **RA1** rankings are updated less frequently - about every second day.
+
+### What happens if I stop playing?
+
+If you become inactive, your **rating stays the same**, but your **deviation slowly increases** over time. That means the system becomes less certain about your skill. After a while, you’ll drop off the list of active players until you return and play enough games to reduce your deviation again.
+
+### How can set my alias?
+
+Asked an admin.
+
+### My rating changed even though I didn’t play. What happened?
+
+Occasionally, ratings may be adjusted due to external corrections - for example:
+
+  - Invalid games being removed.
+  - Duplicate or smurf accounts being detected and cleaned up or merged.
+
+## I think a player is boosting their rating by playing the same opponent over and over. What do you do about it?
+
+Glicko-2 is designed to **ignore repetitive or uninformative results**. Beating the same opponent over and over - especially if they’re much weaker - has little to no effect after a while.
+
+The system also puts **less weight on games against highly uncertain players**, such as new or inactive accounts. If your opponent’s own rating isn’t reliable, the result doesn’t say much about your own strength - and the system treats it accordingly.
+
+In short:
+
+  - **Farming one player doesn’t work.**
+  - **Games against unknown players have little to no effect.**
+
+If you want to climb, you’ll need to prove your skill against a variety of active, stable opponents.

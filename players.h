@@ -67,7 +67,7 @@ public:
 
     // Exporting methods for actual rankings.
 public:
-    //! Export list of active players, sorted by rating. The is the actual elo list.
+    //! Export list of active players, sorted by rating. The is the actual ELO list.
     void exportActivePlayers(const std::filesystem::path &directory, gamemodes::GameMode gameMode) const;
 
     //! Make list of best players of all time.
