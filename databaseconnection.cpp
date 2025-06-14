@@ -599,6 +599,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
         ORDER BY games.updated_at ASC;
     )sql";
 
+    // In contrast to other ladder, RA can start at 2020-01.
     // sides.local_id = stats2.cty do not match for RA
     std::string ladderGamesRA = R"sql(
         SELECT
@@ -624,7 +625,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
         LEFT JOIN qm_matches qmm ON qmm.id = games.qm_match_id
         LEFT JOIN qm_maps qmap ON qmm.qm_map_id = qmap.id
         LEFT JOIN maps maps ON maps.id = qmap.map_id
-        WHERE ladders.abbreviation = 'ra' AND games.created_at >= '2022-01-01'
+        WHERE ladders.abbreviation = 'ra' AND games.created_at >= '2020-01-01'
         ORDER BY games.updated_at ASC
     )sql";
 
