@@ -255,19 +255,27 @@ One thing to avoid: **going on tilt**. A string of unexpected losses - particula
 
 **Consistency beats streakiness.** Glicko-2 favors players who stay sharp.
 
+---
+
 ### How often is the list updated?
 
 The rankings for **Blitz 2v2**, **YR**, and **RA2** are updated once per day, with a daily cutoff at UTC+5 (which corresponds to **midnight EST**). Your rating - as shown on the all-time leaderboard - reflects your status at the end of the previous day, based on that cutoff.
 
 Due to lower activity, **Blitz** and **RA1** rankings are updated less frequently - about every second day.
 
+---
+
 ### What happens if I stop playing?
 
 If you become inactive, your **rating stays the same**, but your **deviation slowly increases** over time. That means the system becomes less certain about your skill. After a while, you’ll drop off the list of active players until you return and play enough games to reduce your deviation again.
 
+---
+
 ### How can set my alias?
 
-Asked an admin.
+Asked an admin on Discord.
+
+---
 
 ### My rating changed even though I didn’t play. What happened?
 
@@ -276,7 +284,9 @@ Occasionally, ratings may be adjusted due to external corrections - for example:
   - Invalid games being removed.
   - Duplicate or smurf accounts being detected and cleaned up or merged.
 
-## I think a player is boosting their rating by playing the same opponent over and over. What do you do about it?
+---
+
+### I think a player is boosting their rating by playing the same opponent over and over. What do you do about it?
 
 Glicko-2 is designed to **ignore repetitive or uninformative results**. Beating the same opponent over and over - especially if they’re much weaker - has little to no effect after a while.
 
