@@ -77,6 +77,7 @@ int main(int argc, char* argv[])
     connection.addDuplicates(69904, { 73057, 75285, 78280});
     connection.addDuplicates(60828, { 77657, 74819});
     connection.removeDuplicate(56589);
+    connection.removeDuplicate(6026);
 
     Log::info() << "Duplicates initiated.";
 
@@ -308,10 +309,7 @@ int main(int argc, char* argv[])
         }
 
         // Update map stats.
-        if (game->playerCount() == 2)
-        {
-            stats.processGame(*game, players);
-        }
+        stats.processGame(*game, players);
 
     } // for (Game *game : validGames)
 

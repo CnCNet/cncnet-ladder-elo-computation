@@ -22,16 +22,43 @@ struct MapPlayed
 struct Upset
 {
     std::chrono::year_month_day date;
-    uint32_t winner;
-    uint32_t loser;
+    std::vector<uint32_t> winners;
+    std::vector<uint32_t> losers;
     std::string map;
-    factions::Faction factionWinner;
-    factions::Faction factionLoser;
+    std::vector<factions::Faction> winnerFactions;
+    std::vector<factions::Faction> loserFactions;
+    std::vector<int> winnerElo;
+    std::vector<int> loserElo;
     double eloDifference;
     uint32_t duration = 0;
 
     // Need the biggest difference on top.
     bool operator<(const Upset &other) const { return eloDifference > other.eloDifference; }
+
+    factions::Faction winnerFaction() const { return faction(winnerFactions); }
+    factions::Faction loserFaction() const { return faction(loserFactions); }
+
+private:
+    factions::Faction faction(const std::vector<factions::Faction> &factions) const
+    {
+        if (std::all_of(factions.begin(), factions.end(),
+            [&](factions::Faction faction){ return faction == factions::Soviet; }))
+        {
+            return factions::Soviet;
+        }
+        else if (std::all_of(factions.begin(), factions.end(),
+            [&](factions::Faction faction){ return faction == factions::Allied; }))
+        {
+            return factions::Allied;
+        }
+        else if (std::all_of(factions.begin(), factions.end(),
+            [&](factions::Faction faction){ return faction == factions::Yuri; }))
+        {
+            return factions::Yuri;
+        }
+
+        return factions::Combined;
+    }
 };
 
 class MapStats

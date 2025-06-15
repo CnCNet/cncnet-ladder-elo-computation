@@ -383,30 +383,27 @@ bool Game::wasDisconnected() const
  */
 double Game::differenceForGreatestDefeat() const
 {
-    if (_participants.size() != 2)
-    {
-        Log::error() << "Difference for greatest defeat is only viable for a 1v1 game.";
-        return 0.0;
-    }
-
     if (_isDraw)
     {
         return 0.0;
     }
 
-    if (_participants[0].hasWon)
+    double winnerElo = 0.0;
+    double loserElo = 0.0;
+
+    for (const Participant &participant : _participants)
     {
-        return (_participants[1].elo - _participants[1].deviation) - (_participants[0].elo + _participants[0].deviation);
+        if (participant.hasWon)
+        {
+            winnerElo += (participant.elo + participant.deviation);
+        }
+        else
+        {
+            loserElo += (participant.elo - participant.deviation);
+        }
     }
-    else if (_participants[1].hasWon)
-    {
-        return (_participants[0].elo - _participants[0].deviation) - (_participants[1].elo + _participants[1].deviation);
-    }
-    else
-    {
-        Log::error() << "Unknown difference for greatest defeat in game " << _id << ".";
-        return 0.0;
-    }
+
+    return loserElo - winnerElo;
 }
 
 /*!

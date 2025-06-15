@@ -257,6 +257,36 @@ public:
         return os;
     }
 
+    //! Check if the given predicate matches all participants.
+    template<typename Predicate>
+    bool allParticipants(Predicate pred) const
+    {
+        return std::all_of(_participants.begin(), _participants.end(), pred);
+    }
+
+    //! Check if the given predicate matches at least one participant.
+    template<typename Predicate>
+    bool anyParticipant(Predicate pred) const
+    {
+        return std::any_of(_participants.begin(), _participants.end(), pred);
+    }
+
+    //! Collect data from participants.
+    template<typename T, typename Func>
+    std::vector<T> collectFromParticipants(Func func) const
+    {
+        std::vector<T> result;
+        for (const auto& p : _participants)
+        {
+            auto [value, include] = func(p);
+            if (include)
+            {
+                result.push_back(value);
+            }
+        }
+        return result;
+    }
+
 private:
     //! Game type.
     gametypes::GameType _gameType = gametypes::Unknown;

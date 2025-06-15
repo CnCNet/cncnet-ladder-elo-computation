@@ -144,10 +144,16 @@ void DatabaseConnection::removeDuplicate(uint32_t userId)
 {
     _duplicates[userId].clear();
 
+    Log::info() << "Removing duplicates for " << userId << ".";
+
     for (auto it = _duplicates.begin(); it != _duplicates.end(); ++it)
     {
         std::set<uint32_t> &set = it->second;
-        set.erase(userId);
+        if (set.contains(userId))
+        {
+            Log::info() << userId << " is not a duplicate of " << it->first << ".";
+            set.erase(userId);
+        }
     }
 }
 

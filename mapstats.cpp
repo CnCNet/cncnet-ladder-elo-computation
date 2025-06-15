@@ -31,7 +31,6 @@ void MapStats::processGame(const Game &game, const Players &players)
     static std::set<std::string> ignoredMaps;
 
     int mapIndex = blitzmap::toIndex(game.mapName());
-    int winner = game.winnerIndex();
 
     if (_gameMode == gamemodes::Blitz && mapIndex < 0)
     {
@@ -87,14 +86,56 @@ void MapStats::processGame(const Game &game, const Players &players)
         return;
     }
 
+    auto losers = [&](const Game& g) -> std::vector<uint32_t> {
+        return g.collectFromParticipants<uint32_t>([](const Game::Participant& p) {
+                return std::pair<uint32_t, bool>{p.userId, !p.hasWon};
+            });};
+
+    auto winners = [&](const Game& g) -> std::vector<uint32_t> {
+        return g.collectFromParticipants<uint32_t>([](const Game::Participant& p) {
+            return std::pair<uint32_t, bool>{p.userId, p.hasWon};
+        });};
+
+    auto winnersFactions =  [&](const Game& g) -> std::vector<factions::Faction> {
+        return g.collectFromParticipants<factions::Faction>([](const Game::Participant& p) {
+            return std::pair<factions::Faction, bool>{p.faction, p.hasWon};
+        });};
+
+    auto losersFactions =  [&](const Game& g) -> std::vector<factions::Faction> {
+        return g.collectFromParticipants<factions::Faction>([](const Game::Participant& p) {
+            return std::pair<factions::Faction, bool>{p.faction, !p.hasWon};
+        });};
+
+    auto winnersELOs = [&](const Game& g) -> std::vector<int> {
+        return g.collectFromParticipants<int>([](const Game::Participant& p) {
+            return std::pair<int, bool>{p.elo, p.hasWon};
+        });};
+
+    auto losersELOs = [&](const Game& g) -> std::vector<int> {
+        return g.collectFromParticipants<int>([](const Game::Participant& p) {
+            return std::pair<int, bool>{p.elo, !p.hasWon};
+        });};
+
     // Process potential upset.
     double diff = game.differenceForGreatestDefeat();
     if (diff > 300.0)
     {
         // Loser needs to have deviation < 120 or must have been active before.
-        if (!game.isBot() && (game.deviation(winner ^ 1) < 120 || players[game.userId(winner ^ 1)].wasActive()))
+        if (!game.isBot() &&
+            game.allParticipants([&](const Game::Participant& p) {
+                return p.hasWon || (!p.hasWon && (p.deviation < 120.0 || players[p.userId].wasActive())); }))
         {
-            Upset upset{ game.date(), game.userId(winner), game.userId(winner ^ 1), mapName, game.faction(winner), game.faction(winner ^ 1), diff };
+
+            Log::warning() << game << " ==> " << diff;
+
+            std::vector<uint32_t> winnerIds = winners(game);
+            std::vector<uint32_t> loserIds = losers(game);
+            std::vector<factions::Faction> winnerFactions = winnersFactions(game);
+            std::vector<factions::Faction> loserFactions = losersFactions(game);
+            std::vector<int> winnerELOs = winnersELOs(game);
+            std::vector<int> loserELOs = losersELOs(game);
+
+            Upset upset{ game.date(), winnerIds, loserIds, mapName, winnerFactions, loserFactions, winnerELOs, loserELOs, diff };
             _upsetsMonthly[date].insert(upset);
             if (_upsetsMonthly[date].size() > 20)
             {
@@ -134,7 +175,7 @@ void MapStats::processGame(const Game &game, const Players &players)
     {
         // First, we normalize the duration.
         uint32_t duration = game.duration() * game.fps() / 59;
-        Upset upset{ game.date(), game.userId(winner), game.userId(winner ^ 1), mapName, game.faction(winner), game.faction(winner ^ 1), diff, duration };
+        Upset upset{ game.date(), winners(game), losers(game), mapName, winnersFactions(game), losersFactions(game), winnersELOs(game), losersELOs(game), diff, duration };
         _longestGames.insert(upset);
         if (_longestGames.size() > 25)
         {
@@ -144,6 +185,11 @@ void MapStats::processGame(const Game &game, const Players &players)
 
     // Now do the real map stats. Only interested in different faction games.
     if (game.faction(0) == game.faction(1))
+    {
+        return;
+    }
+
+    if (game.playerCount() > 2)
     {
         return;
     }
@@ -169,7 +215,7 @@ void MapStats::processGame(const Game &game, const Players &players)
     if (factionSetup == factions::AvS)
     {
         uint32_t alliedPlayerIndex = game.faction(0) == factions::Allied ? 0 : 1;
-        uint32_t sovietPlayerIndex = game.faction(1) == factions::Soviet ? 0 : 1;
+        uint32_t sovietPlayerIndex = game.faction(0) == factions::Soviet ? 0 : 1;
 
         Rating alliedRating(game.rating(alliedPlayerIndex), game.deviation(alliedPlayerIndex), glicko::initialVolatility);
         Rating sovietRating(game.rating(sovietPlayerIndex), game.deviation(sovietPlayerIndex), glicko::initialVolatility);
@@ -550,15 +596,19 @@ void MapStats::exportLongestGames(const std::filesystem::path &directory, const 
     // Process longest games.
     json jLongestGames = json::array();
     int rank = 1;
+
     for (auto it = _longestGames.begin(); it != _longestGames.end(); ++it)
     {
         json jLongestGame = json::object();
         jLongestGame["rank"] = rank++;
         jLongestGame["date"] = stringtools::fromDate(it->date);
-        jLongestGame["winner"] = players[it->winner].alias();
-        jLongestGame["loser"] = players[it->loser].alias();
-        jLongestGame["winner_faction"] = factions::shortName(it->factionWinner);
-        jLongestGame["loser_faction"] = factions::shortName(it->factionLoser);
+        jLongestGame["winner"] = players[it->winners.front()].alias() +
+                                 ((it->winners.size() > 1) ? "/" + players[it->winners[1]].alias() : "");
+        jLongestGame["loser"] = players[it->losers.front()].alias() +
+                                ((it->losers.size() > 1) ? "/" + players[it->losers[1]].alias() : "");
+
+        jLongestGame["winner_faction"] = factions::shortName(it->winnerFaction());
+        jLongestGame["loser_faction"] = factions::shortName(it->loserFaction());
         jLongestGame["map"] = it->map;
         jLongestGame["duration_seconds"] = it->duration;
         jLongestGames.push_back(jLongestGame);
@@ -612,7 +662,7 @@ void MapStats::exportUpsets(
         { { "index", 4 }, { "header", "" } , { "name", "faction_loser" }, { "info", "Losers faction." } },
         { { "index", 5 }, { "header", "Loser" } , { "name", "loser" } },
         { { "index", 6 }, { "header", "Map" } , { "name", "map" } },
-        { { "index", 7 }, { "header", "Diff" } , { "name", "rating_difference" }, { "info", "Difference in ELO rating."} }
+        { { "index", 7 }, { "header", "Diff" } , { "name", "rating_difference" }, { "info", "Difference in ELO rating. Considers deviation."} }
     });
 
     json jUpsets = json::array();
@@ -623,12 +673,20 @@ void MapStats::exportUpsets(
         json jUpset = json::object();
         jUpset["rank"] = rank++;
         jUpset["date"] = stringtools::fromDate(it->date);
-        jUpset["winner"] = players[it->winner].alias();
-        jUpset["loser"] = players[it->loser].alias();
-        jUpset["faction_winner"] = factions::shortName(it->factionWinner);
-        jUpset["faction_loser"] = factions::shortName(it->factionLoser);
+        jUpset["winner"] =
+            players[it->winners[0]].alias() + ((it->winners.size() == 1) ? "" :
+            " (" + std::to_string(it->winnerElo[0]) + ") / "
+            + players[it->winners[1]].alias() + " (" + std::to_string(it->winnerElo[1]) + ")");
+
+        jUpset["loser"] =
+            players[it->losers[0]].alias() + ((it->losers.size() == 1) ? "" :
+            " (" + std::to_string(it->loserElo[0]) + ") / "
+            + players[it->losers[1]].alias() + " (" + std::to_string(it->loserElo[1]) + ")");
+
+        jUpset["faction_winner"] = factions::shortName(it->winnerFaction());
+        jUpset["faction_loser"] = factions::shortName(it->loserFaction());
         jUpset["map"] = it->map;
-        jUpset["rating_difference"] = std::to_string(static_cast<int>(it->eloDifference));
+        jUpset["rating_difference"] = "\u2265 " + std::to_string(static_cast<int>(it->eloDifference));
         jUpsets.push_back(jUpset);
     }
 

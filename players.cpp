@@ -119,7 +119,7 @@ void Players::markDuplicates(uint32_t id, const std::set<uint32_t> &duplicates)
     if (id == 1)
     {
         // All duplicates of user 1 are test accounts. These games won't count
-        // when computing elo.
+        // when computing ELO.
         _testAccounts.insert(duplicates.begin(), duplicates.end());
     }
 }
@@ -219,7 +219,7 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
         { { "index", 0 }, { "header", "#" } , { "name", "rank" } },
         { { "index", 1 }, { "header", "" } , { "name", "faction" }, { "info", "Indicating if your allied, soviet" + yuri + " or combined rating is your best." } },
         { { "index", 2 }, { "header", "Name" } , { "name", "name" } },
-        { { "index", 3 }, { "header", "Elo" } , { "name", "elo" }, { "info", "Your current elo." } },
+        { { "index", 3 }, { "header", "Elo" } , { "name", "elo" }, { "info", "Your current ELO." } },
         { { "index", 4 }, { "header", "Deviation" } , { "name", "deviation" }, { "info", "Your current deviation. The lower the deviation the more accurate is your rating. You need to have a deviation less than about 100 to be considered an active player. The deviation grows if you don't play." } },
         { { "index", 5 }, { "header", "Games" } , { "name", "game_count" }, { "info", "Total number of games played." } },
         { { "index", 5 }, { "header", "DTI" } , { "name", "days_to_inactivity" }, { "info", "Days to inactivity. If you stop playing today, you will be considered an inactive player after this amount of days." } },
@@ -289,7 +289,7 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
 
             if (faction == factions::Combined)
             {
-                // Do not export combined elo.
+                // Do not export combined ELO.
                 continue;
             }
 
@@ -348,7 +348,7 @@ void Players::exportBestOfAllTime(
         { { "index", 1 }, { "header", "" } , { "name", "faction" }, { "info", "Indicating if your allied, soviet" + yuri + " or combined rating is used." } },
         { { "index", 2 }, { "header", "Name" } , { "name", "name" } },
         { { "index", 3 }, { "header", "Date" } , { "name", "date" }, { "info", "The date on which the peak was reached." } },
-        { { "index", 4 }, { "header", "Peak" } , { "name", "peak" }, { "info", "Peak rating is elo minus deviation at the given point of time." } },
+        { { "index", 4 }, { "header", "Peak" } , { "name", "peak" }, { "info", "Peak rating is ELO minus deviation at the given point of time." } },
         { { "index", 5 }, { "header", "Status" } , { "name", "status" } }
     });
 
