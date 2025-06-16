@@ -60,10 +60,7 @@ public:
     void finalize();
 
     //! Apply pending games to all players.
-    void apply(std::chrono::year_month_day date, bool decay);
-
-    //! Apply decay function to all players.
-    void decay();
+    void apply(std::chrono::year_month_day date, bool decay, gamemodes::GameMode gameMode);
 
     // Exporting methods for actual rankings.
 public:

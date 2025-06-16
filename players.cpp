@@ -165,26 +165,16 @@ void Players::update()
 
 /*!
  */
-void Players::apply(std::chrono::year_month_day date, bool decay)
+void Players::apply(std::chrono::year_month_day date, bool decay, gamemodes::GameMode gameMode)
 {
     for (std::map<uint32_t, Player>::iterator it = _players.begin(); it != _players.end(); ++it)
     {
         Player &player = it->second;
-        player.apply(date, decay);
+        player.apply(date, decay, gameMode);
         if (it->first == dts::to_underlying(KnownPlayers::BlitzBot))
         {
             Log::debug() << "The blitz bots current rating is " << it->second.elo(factions::Combined) << ".";
         }
-    }
-}
-
-/*!
- */
-void Players::decay()
-{
-    for (std::map<uint32_t, Player>::iterator it = _players.begin(); it != _players.end(); ++it)
-    {
-        it->second.decay();
     }
 }
 
@@ -268,7 +258,7 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
         std::ostringstream oss;
         oss << std::fixed << std::setprecision(1) << player->deviation(faction);
         jsonPlayer["deviation"] = oss.str();
-        jsonPlayer["days_to_inactivity"] = player->daysToInactivity();
+        jsonPlayer["days_to_inactivity"] = player->daysToInactivity(gameMode);
         jsonPlayer["game_count"] = player->gameCount();
         jsonPlayer["active"] = player->isActive();
 

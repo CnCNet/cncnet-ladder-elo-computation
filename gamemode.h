@@ -46,4 +46,16 @@ inline constexpr GameMode toGameMode(int i)
 //! Get the game type from a string.
 GameMode toGameMode(const std::string &name);
 
+//! Specific decay factor for each game mode.
+double decayFactor(GameMode gameMode);
+
+//! Deviation threshold to become active.
+double deviationThresholdActive(GameMode gameMode, double elo);
+
+//! Deviation threshold to become inactive.
+double deviationThresholdInactive(GameMode gameMode, double elo);
+
+//! Maximum deviation you can get after having been active is game-dependent.
+double maxDeviationAfterActive(GameMode gameMode);
+
 } // namespace gamemodes

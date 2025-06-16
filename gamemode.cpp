@@ -1,5 +1,6 @@
 
 #include "gamemode.h"
+#include "rating.h"
 
 namespace gamemodes
 {
@@ -87,6 +88,62 @@ uint32_t playerCount(GameMode gameMode)
         return 0;
     default:
         return 0;
+    }
+}
+
+/*!
+ */
+double decayFactor(GameMode gameMode)
+{
+    if (gameMode == GameMode::YurisRevenge)
+    {
+        return 2.5;
+    }
+    else
+    {
+        return 3.5;
+    }
+}
+
+/*!
+ */
+double maxDeviationAfterActive(GameMode gameMode)
+{
+    if (gameMode == GameMode::YurisRevenge)
+    {
+        return 150.0;
+    }
+    else
+    {
+        return 175.0;
+    }
+}
+
+/*!
+ */
+double deviationThresholdActive(GameMode gameMode, double currentElo)
+{
+    if (gameMode == GameMode::YurisRevenge)
+    {
+        return 65.0 + sqrt(abs(glicko::initialRating - currentElo));
+    }
+    else
+    {
+        return 65.0 + sqrt(abs(glicko::initialRating - currentElo));
+    }
+}
+
+/*!
+ */
+double deviationThresholdInactive(GameMode gameMode, double currentElo)
+{
+    if (gameMode == GameMode::YurisRevenge)
+    {
+        return 85.0 + log(abs(glicko::initialRating - currentElo));
+    }
+    else
+    {
+        return 85.0 + sqrt(abs(glicko::initialRating - currentElo));
     }
 }
 

@@ -138,18 +138,15 @@ public:
     //! Process the given game.
     void processGame(const Game& game, int index, bool instantUpdate, const Players &players);
 
-    //! Decay the ratings for all factions.
-    void decay();
-
     //! Apply all pending games.
-    void apply(std::chrono::year_month_day date, bool decay);
+    void apply(std::chrono::year_month_day date, bool decay, gamemodes::GameMode gameMode);
 
     //! Update a players rating.
     Rating::CalculationType update();
 
     //! Check how many days can pass until this players becomes inactive.
     //! Returns 0 if the player is already inactive.
-    int daysToInactivity() const;
+    int daysToInactivity(gamemodes::GameMode gameMode) const;
 
     //! Number of days since the last game was played.
     int daysFromLastGame() const;

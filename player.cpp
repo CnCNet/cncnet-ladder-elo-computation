@@ -288,16 +288,6 @@ double Player::volatility(factions::Faction faction) const
 
 /*!
  */
-void Player::decay()
-{
-    for (size_t i = 0; i < _ratings.size(); i++)
-    {
-        _ratings[i].decay();
-    }
-}
-
-/*!
- */
 Rating::CalculationType Player::update()
 {
     uint32_t gameCount = 0;
@@ -361,7 +351,7 @@ Rating::CalculationType Player::update()
 
 /*!
  */
-void Player::apply(std::chrono::year_month_day date, bool decay)
+void Player::apply(std::chrono::year_month_day date, bool decay, gamemodes::GameMode gameMode)
 {
     for (size_t i = 0; i < _ratings.size(); i++)
     {
@@ -373,7 +363,7 @@ void Player::apply(std::chrono::year_month_day date, bool decay)
         }
         else if (decay)
         {
-            _ratings[i].decay();
+            _ratings[i].decay(this->wasActive(), gamemodes::decayFactor(gameMode), gamemodes::maxDeviationAfterActive(gameMode));
         }
 
         _updated[i] = false;
@@ -391,12 +381,8 @@ void Player::apply(std::chrono::year_month_day date, bool decay)
                 }
             }
         }
-        double lowerLimit = deviation(faction) - std::sqrt(std::abs(glicko::initialRating - maxElo));
-        double upperLimit = deviation(faction) - std::sqrt(std::abs(glicko::initialRating - elo(faction)));
-        double ll = 65.0;
-        double uu = 85.0;
 
-        if (lowerLimit < ll && !isActive(faction))
+        if (deviation(faction) < gamemodes::deviationThresholdActive(gameMode, elo(faction)) && !isActive(faction))
         {
             if (!isActive())
             {
@@ -413,7 +399,7 @@ void Player::apply(std::chrono::year_month_day date, bool decay)
             _factionStatusList[i].push_back(date);
             Log::debug() << date << " => " << alias()<< " goes active after " << _gameCount[i] << " games for faction '" << factions::name(faction) << "'.";
         }
-        else if (upperLimit > uu && isActive(faction))
+        else if (deviation(faction) > gamemodes::deviationThresholdInactive(gameMode, elo(faction)) && isActive(faction))
         {
             // Too bad... going inactive.
             Log::debug() << date << " => " << alias() << " goes inactive for faction '" << factions::name(faction) << "'.";
@@ -510,7 +496,7 @@ int Player::daysFromFirstGame() const
 
 /*!
  */
-int Player::daysToInactivity() const
+int Player::daysToInactivity(gamemodes::GameMode gameMode) const
 {
     int days = 0;
 
@@ -526,7 +512,7 @@ int Player::daysToInactivity() const
             while (currentDays < 1000 && (testRating.deviation() * glicko::scaleFactor) - std::sqrt(std::abs(glicko::initialRating - elo(faction))) < 85.0)
             {
                 currentDays++;
-                testRating.decay();
+                testRating.decay(true, gamemodes::decayFactor(gameMode), gamemodes::maxDeviationAfterActive(gameMode));
             }
 
             days = std::max(currentDays, days);

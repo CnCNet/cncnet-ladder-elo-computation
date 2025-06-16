@@ -204,6 +204,10 @@ int main(int argc, char* argv[])
             continue;
         }
 
+        // Do not consider bot for other game modes than Blitz.
+        if (game.isBot() && options.gameMode != gamemodes::Blitz)
+            continue;
+
         // Ignore games on non-ELO maps in blitz.
         if (options.gameMode == gamemodes::Blitz && blitzmap::toIndex(mapName) == -1)
         {
@@ -296,10 +300,10 @@ int main(int argc, char* argv[])
         {
             Log::info() << "Apply update for " << stringtools::fromDate(date);
             players.update();
-            // In constrast to the local ELO list, the result are for the current day, which means that
+            // In contrast to the local ELO list, the result are for the current day, which means that
             // your peak rating is set to the day where you achieved it and not they day after, when it's visible
             // for the first time.
-            players.apply(currentDate, true);
+            players.apply(currentDate, true, options.gameMode);
             currentDate = date;
         }
 
@@ -315,7 +319,7 @@ int main(int argc, char* argv[])
 
     // Process the last day.
     players.update();
-    players.apply(lastDate, true);
+    players.apply(lastDate, true, options.gameMode);
     players.finalize();
 
     if (!options.dryRun)

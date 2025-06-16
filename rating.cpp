@@ -306,7 +306,7 @@ Rating::CalculationType Rating::update(const std::vector<std::array<double, 3>>&
 
 /*!
  */
-void Rating::decay()
+void Rating::decay(bool wasActive, double factor, double maxDeviationAfterActive)
 {
     if (_games == 0)
     {
@@ -314,7 +314,7 @@ void Rating::decay()
         double trueDeviation = deviation() * glicko::scaleFactor;
 
         // This is a custom deviation function.
-        trueDeviation = std::min(350.0, trueDeviation + (std::pow(std::log(trueDeviation) / std::log(3.5), 3.5) / 100.0f));
+        trueDeviation = std::min(wasActive ? maxDeviationAfterActive : 350.0, trueDeviation + (std::pow(std::log(trueDeviation) / std::log(factor), factor) / 100.0f));
 
         // Back to internal deviation.
         _deviation = trueDeviation / glicko::scaleFactor;
@@ -333,20 +333,6 @@ void Rating::apply()
     _volatility = _pendingVolatility;
     _deviation = _pendingDeviation;
     _rating = _pendingRating;
-
-    if (_pendingGames == 0)
-    {
-        if (_pendingDeviation < glicko::initialDeviation)
-        {
-            double temp = 350.0 - _pendingDeviation;
-            _pendingDeviation += (std::log(temp) / std::log(2)) / 10;
-        }
-        else
-        {
-            _pendingDeviation = 350.0;
-        }
-    }
-
     _pendingGames = 0;
 }
 

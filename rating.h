@@ -81,7 +81,8 @@ public:
 
     //! Decay function. Needs to be called after each rating period. Either resets
     //! the number of games played or increases deviation.
-    void decay();
+    void decay(bool wasActive, double factor, double maxDeviationAfterActive);
+    void decay(bool wasActive, int factor, int maxDeviationAfterActive) = delete;
 
     //! Get the elo. Automatically performs the transformation of glicko2 to elo;
     double elo() const;
