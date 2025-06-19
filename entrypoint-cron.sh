@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+# Write environment for cron
+printenv > /etc/environment
+
 if [ -f /mnt/crontab ]; then
     cp /mnt/crontab /etc/cron.d/elogen-cron
     chmod 644 /etc/cron.d/elogen-cron

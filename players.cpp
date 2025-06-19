@@ -203,7 +203,14 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
 
     std::string yuri = (gameMode == gamemodes::YurisRevenge) ? ", yuri" : "";
 
-    data["description"] = "Active players sorted by ELO";
+    if (gameMode != gamemodes::Blitz2v2)
+    {
+        data["description"] = "Active players sorted by ELO";
+    }
+    else
+    {
+        data["description"] = "Active players sorted by combined ELO";
+    }
 
     data["columns"] = json::array({
         { { "index", 0 }, { "header", "#" } , { "name", "rank" } },
@@ -239,8 +246,16 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
     }
 
     // Now sort the players.
-    std::sort(filteredAndSortedPlayers.begin(), filteredAndSortedPlayers.end(),
-              [] (const Player *a, const Player *b) { return a->maxRating() > b->maxRating();});
+    if (gameMode == gamemodes::Blitz2v2)
+    {
+        std::sort(filteredAndSortedPlayers.begin(), filteredAndSortedPlayers.end(),
+                  [] (const Player *a, const Player *b) { return a->elo(factions::Combined) > b->elo(factions::Combined);});
+    }
+    else
+    {
+        std::sort(filteredAndSortedPlayers.begin(), filteredAndSortedPlayers.end(),
+                  [] (const Player *a, const Player *b) { return a->maxRating() > b->maxRating();});
+    }
 
     json players = json::array();
 
@@ -252,11 +267,21 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
         jsonPlayer["rank"] = i + 1;
         jsonPlayer["name"] = player->alias();
 
-        factions::Faction faction = player->getBestActiveFaction();
+        factions::Faction faction = (gameMode == gamemodes::Blitz2v2) ? factions::Combined : player->getBestActiveFaction();
         jsonPlayer["faction"] = factions::shortName(faction);
-        jsonPlayer["elo"] = std::to_string(static_cast<int>(player->elo(faction)));
+
         std::ostringstream oss;
-        oss << std::fixed << std::setprecision(1) << player->deviation(faction);
+        if (gameMode == gamemodes::Blitz2v2)
+        {
+            jsonPlayer["elo"] = std::to_string(static_cast<int>(player->elo(factions::Combined)));
+            oss << std::fixed << std::setprecision(1) << player->deviation(factions::Combined);
+        }
+        else
+        {
+            jsonPlayer["elo"] = std::to_string(static_cast<int>(player->elo(faction)));
+            oss << std::fixed << std::setprecision(1) << player->deviation(faction);
+        }
+
         jsonPlayer["deviation"] = oss.str();
         jsonPlayer["days_to_inactivity"] = player->daysToInactivity(gameMode);
         jsonPlayer["game_count"] = player->gameCount();
@@ -323,8 +348,16 @@ void Players::exportBestOfAllTime(
     }
 
     // Now sort the players.
-    std::sort(filteredAndSortedPlayers.begin(), filteredAndSortedPlayers.end(),
-              [] (const Player *a, const Player *b) { return a->peakRating().adjustedElo > b->peakRating().adjustedElo; });
+    if (gameMode == gamemodes::Blitz2v2)
+    {
+        std::sort(filteredAndSortedPlayers.begin(), filteredAndSortedPlayers.end(),
+                  [] (const Player *a, const Player *b) { return a->peakRating(factions::Combined).adjustedElo > b->peakRating(factions::Combined).adjustedElo; });
+    }
+    else
+    {
+        std::sort(filteredAndSortedPlayers.begin(), filteredAndSortedPlayers.end(),
+                  [] (const Player *a, const Player *b) { return a->peakRating().adjustedElo > b->peakRating().adjustedElo; });
+    }
 
     using json = nlohmann::json;
 
@@ -350,12 +383,14 @@ void Players::exportBestOfAllTime(
 
         const Player *player = filteredAndSortedPlayers[i];
 
+        PeakRating peak = (gameMode == gamemodes::Blitz2v2) ? player->peakRating(factions::Combined) : player->peakRating();
+
         jsonPlayer["rank"] = i + 1;
         jsonPlayer["name"] = player->alias();
-        jsonPlayer["faction"] = factions::shortName(player->peakRating().faction);
-        jsonPlayer["peak"] = std::to_string(static_cast<int>(player->peakRating().adjustedElo));
-        jsonPlayer["deviation"] = std::to_string(static_cast<int>(player->peakRating().deviation));
-        jsonPlayer["date"] = stringtools::fromDate(player->peakRating().date);
+        jsonPlayer["faction"] = factions::shortName(peak.faction);
+        jsonPlayer["peak"] = std::to_string(static_cast<int>(peak.adjustedElo));
+        jsonPlayer["deviation"] = std::to_string(static_cast<int>(peak.deviation));
+        jsonPlayer["date"] = stringtools::fromDate(peak.date);
         if (player->isActive() && player->maxRating(false) > 0)
         {
             jsonPlayer["current"] = std::to_string(static_cast<int>(player->maxRating(false)));

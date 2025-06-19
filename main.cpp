@@ -189,6 +189,12 @@ int main(int argc, char* argv[])
         uint32_t fps = game.fps();
         std::string mapName = game.mapName();
 
+        if (game.playerCount() != gamemodes::playerCount(options.gameMode))
+        {
+            Log::verbose() << "Skipping game " << game.id() << " due to player count mismatch.";
+            continue;
+        }
+
         // Ignore games with less than 35 seconds.
         if (type == gametypes::Quickmatch && duration != 0 && duration < 35)
         {
@@ -349,6 +355,7 @@ int main(int argc, char* argv[])
     stats.finalize(options.outputDirectory, players);
     stats.exportUpsets(options.outputDirectory, players);
     stats.exportLongestGames(options.outputDirectory, players);
+    stats.exportBestTeams(options.outputDirectory, players);
 
     // Map stats and player details not suitable for 2v2 games.
     if (gamemodes::playerCount(options.gameMode) == 2 && options.exportFullStats)

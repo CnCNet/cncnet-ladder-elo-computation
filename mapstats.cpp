@@ -170,6 +170,45 @@ void MapStats::processGame(const Game &game, const Players &players)
         }
     }
 
+    // Process team stats.
+    if (_gameMode == gamemodes::Blitz2v2)
+    {
+        auto gameWinners = [&](const Game& g) -> std::vector<Game::Participant> {
+            return g.collectFromParticipants<Game::Participant>([](const Game::Participant& p) {
+                return std::pair<Game::Participant, bool>{p, p.hasWon};
+            });};
+
+        auto gameLosers = [&](const Game& g) -> std::vector<Game::Participant> {
+            return g.collectFromParticipants<Game::Participant>([](const Game::Participant& p) {
+                return std::pair<Game::Participant, bool>{p, !p.hasWon};
+            });};
+
+        std::vector<Game::Participant> winners = gameWinners(game);
+        std::vector<Game::Participant> losers = gameLosers(game);
+        assert(winners.size() == 2 && losers.size() == 2);
+
+        std::set<uint64_t> winnerIds = { winners[0].userId, winners[1].userId };
+        std::set<uint64_t> loserIds = { losers[0].userId, losers[1].userId };
+        uint64_t winnerTeamId = ((*winnerIds.begin()) << 32) | *winnerIds.rbegin();
+        uint64_t loserTeamId = ((*loserIds.begin()) << 32) | *loserIds.rbegin();
+
+        Probabilities &probsWinners = _teamStats[winnerTeamId];
+        Probabilities &probsLosers = _teamStats[loserTeamId];
+
+        _lastTeamELOs[winnerTeamId].first = (winners[0].userId < winners[1].userId) ? winners[1].elo : winners[0].elo;
+        _lastTeamELOs[winnerTeamId].second = (winners[1].userId > winners[0].userId) ? winners[0].elo : winners[1].elo;
+        _lastTeamELOs[loserTeamId].first = (losers[0].userId < losers[1].userId) ? losers[1].elo : losers[0].elo;
+        _lastTeamELOs[loserTeamId].second = (losers[1].userId > losers[0].userId) ? losers[0].elo : losers[1].elo;
+
+        Rating winnerRating(winners[0].elo + winners[1].elo, winners[0].deviation + winners[1].deviation, glicko::initialVolatility);
+        Rating losersRating(losers[0].elo + losers[1].elo, losers[0].deviation + losers[1].deviation, glicko::initialVolatility);
+
+        double expectedWinRate = winnerRating.e_star(losersRating.toArray(), 0.0);
+
+        probsWinners.addGame(expectedWinRate, 1);
+        probsLosers.addGame(1.0 - expectedWinRate, 0);
+    }
+
     // Process longest games.
     if (!game.isBot() && !game.isDraw() && game.duration() > 600 && game.fps() > 0)
     {
@@ -286,6 +325,23 @@ void MapStats::finalize(const std::filesystem::path &directory, const Players &p
     using json = nlohmann::json;
 
     static std::vector<factions::Setup> factionSetups = { factions::AvS, factions::AvY, factions::YvS };
+
+    for (std::map<uint64_t, Probabilities>::iterator it = _teamStats.begin(); it != _teamStats.end(); ++it)
+    {
+        uint64_t key = it->first;
+        Probabilities &value = it->second;
+        value.finalize();
+        uint32_t player1 = static_cast<uint32_t>(key & 0xFFFFFFFF);
+        uint32_t player2 = static_cast<uint32_t>(key >> 32);
+
+        // Exclude teams where no player has ELO > 1400.
+        if (value.count() > 20 && players[player1].isActive() && players[player2].isActive() && value.wins() > 1 &&
+            value.count() != value.wins() &&
+            (players[player1].elo(factions::Combined) > 1400 || players[player2].elo(factions::Combined) > 1400))
+        {
+            _teams.insert({key, value.count(), value.wins(), players[player1].elo(factions::Combined) + players[player2].elo(factions::Combined), value.eloDifference() });
+        }
+    }
 
     for (factions::Setup factionSetup : factionSetups)
     {
@@ -618,6 +674,60 @@ void MapStats::exportLongestGames(const std::filesystem::path &directory, const 
     streamLongest << std::setw(4) << jLongestGames << std::endl;
     streamLongest.close();
 }
+
+/*!
+ */
+void MapStats::exportBestTeams(const std::filesystem::path &directory, const Players &players)
+{
+    using json = nlohmann::json;
+
+    json data = json::object();
+
+    data["description"] = "Top 20 teams with the highest performance above predicted ELO";
+    data["columns"] = json::array({
+        { { "index", 0 }, { "header", "#" } , { "name", "rank" } },
+        { { "index", 1 }, { "header", "Names" } , { "name", "names" } },
+        { { "index", 2 }, { "header", "Games" } , { "name", "games" } },
+        { { "index", 3 }, { "header", "Team ELO" } , { "name", "elo_team" } },
+        { { "index", 4 }, { "header", "Performance" } , { "name", "performance" } },
+        { { "index", 5 }, { "header", "Difference" } , { "name", "diff" }, { "info", "Performance above team ELO."} }
+    });
+
+    int rank = 1;
+    json jTeams = json::array();
+
+    // Now process upsets.
+    for (const Team &team : _teams)
+    {
+        json jTeam = json::object();
+        jTeam["rank"] = rank++;
+        uint32_t elo1 = static_cast<uint32_t>(std::round(_lastTeamELOs[team.teamId].first));
+        uint32_t elo2 = static_cast<uint32_t>(std::round(_lastTeamELOs[team.teamId].second));
+
+        std::string player1 = players[team.player1()].alias() + " (" + std::to_string(elo1)  + ")";
+        std::string player2 = players[team.player2()].alias() + " (" + std::to_string(elo2)  + ")";
+        jTeam["names"] = player1 + " / " + player2;
+        jTeam["elo_team"] = std::to_string(elo1 + elo2);
+        jTeam["games"] = std::to_string(team.games);
+        jTeam["performance"] = std::to_string(elo1 + elo2 + static_cast<uint32_t>(std::round(team.eloDifference)));
+        jTeam["diff"] = std::to_string(static_cast<uint32_t>(std::round(team.eloDifference)));
+        jTeams.push_back(jTeam);
+
+        if (rank == 21)
+            break;
+    }
+
+    data["data"] = jTeams;
+
+    if (!_teams.empty())
+    {
+        std::string filename = gamemodes::shortName(_gameMode) + "_best_teams.json";
+        std::ofstream stream(directory / filename);
+        stream << std::setw(4) << data << std::endl;
+        stream.close();
+    }
+}
+
 
 /*!
  */

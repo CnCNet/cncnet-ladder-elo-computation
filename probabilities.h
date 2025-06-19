@@ -39,6 +39,9 @@ public:
     //! Get the actual result.
     double result() const;
 
+    //! Get the result in elo diffence.
+    double eloDifference() const;
+
 private:
     //! Winning probabilities for each game. Will be e
     //! valuated during finalization.

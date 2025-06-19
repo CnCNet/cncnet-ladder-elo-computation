@@ -38,10 +38,10 @@ public:
     //! Add a players. Needs to have a valid user id.
     void add(const Player &player, const std::string &ladderAbbreviation);
 
-    //! Array subscript operetor.
+    //! Array subscript operator. Returns player by user id.
     Player& operator[](uint32_t index);
 
-    //! Const array subscript operator.
+    //! Const array subscript operator. Returns player by user id.
     Player operator[](uint32_t index) const;
 
     //! Get the number of currently active players.

@@ -61,6 +61,20 @@ private:
     }
 };
 
+struct Team
+{
+    uint64_t teamId;
+    uint32_t games = 0;
+    uint32_t wins;
+    double teamELO;
+    double eloDifference;
+
+    uint32_t player1() const { return static_cast<uint32_t>(teamId & 0xFFFFFFFF); }
+    uint32_t player2() const { return static_cast<uint32_t>(teamId >> 32); }
+
+    bool operator<(const Team &other) const { return eloDifference > other.eloDifference; }
+};
+
 class MapStats
 {
 public:
@@ -85,6 +99,9 @@ public:
     //! Export the maps played for each month.
     void exportMapsPlayed(const std::filesystem::path &directory);
 
+    //! Export best teams for Blitz2v2.
+    void exportBestTeams(const std::filesystem::path &directory, const Players &players);
+
 private:
     //! Export the given list of upsets.
     void exportUpsets(const std::filesystem::path &directory, const std::multiset<Upset> &upsets, const std::string &filename, const std::string &description, const Players &players) const;
@@ -97,6 +114,13 @@ private:
 
     //! Overall map statistics each map.
     std::map<std::string, Probabilities> _mapStats[factions::UnknownSetup];
+
+    //! Teams statistics for blitz-2v2.
+    std::map<uint64_t, Probabilities> _teamStats;
+    std::map<uint64_t, std::pair<double, double>> _lastTeamELOs;
+
+    //! Teams statistics;
+    std::multiset<Team> _teams;
 
     //! Number of games for each player on each for each month.
     //! Key of second map is the normalized map name.

@@ -162,6 +162,18 @@ double Probabilities::result() const
     return _normalized;
 }
 
+/*!
+ */
+double Probabilities::eloDifference() const
+{
+    if (!_isFinalized)
+    {
+        throw std::runtime_error("Trying to get elo diff from an non-finalized class.");
+    }
+
+    return -400.0 * std::log10((1.0 / _normalized) - 1.0);
+}
+
 bool operator<(std::pair<std::string, Probabilities> a, std::pair<std::string, Probabilities> b)
 {
     return std::pair<uint32_t, Probabilities>{ 0U, a.second } < std::pair<uint32_t, Probabilities>{ 0U, b.second };
