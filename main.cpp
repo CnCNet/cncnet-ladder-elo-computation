@@ -76,6 +76,7 @@ int main(int argc, char* argv[])
     connection.addDuplicates(67596, { 36814 });
     connection.addDuplicates(69904, { 73057, 75285, 78280});
     connection.addDuplicates(60828, { 77657, 74819});
+    connection.addDuplicates(65311, { 81488 });
     connection.removeDuplicate(56589);
     connection.removeDuplicate(6026);
 

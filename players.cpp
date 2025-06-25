@@ -613,7 +613,7 @@ void Players::exportNewPlayers(const std::filesystem::path &directory, gamemodes
                 jsonPlayer[factions::shortName(faction) + "_elo"] = std::to_string(static_cast<int>(player->elo(faction)));
                 std::ostringstream oss;
                 oss << std::fixed << std::setprecision(1) << player->deviation(faction);
-                jsonPlayer["deviation"] = oss.str();
+                jsonPlayer[factions::shortName(faction) + "_deviation"] = oss.str();
                 jsonPlayer[factions::shortName(faction) + "_games"] = player->gameCount(faction);
             }
         }
