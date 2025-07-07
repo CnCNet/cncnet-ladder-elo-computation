@@ -60,7 +60,7 @@ uint32_t Probabilities::count() const
 
 /*!
  */
-void Probabilities::addGame(double winningProbability, bool isWin)
+void Probabilities::addGame(double winningProbability, std::chrono::sys_days date, bool isWin)
 {
     if (_isFinalized)
     {
@@ -73,6 +73,8 @@ void Probabilities::addGame(double winningProbability, bool isWin)
     }
 
     _winningProbabilities.push_back(winningProbability);
+    _dates.push_back(date);
+    _win.push_back(isWin);
 
     if (isWin)
     {
@@ -80,6 +82,54 @@ void Probabilities::addGame(double winningProbability, bool isWin)
     }
 }
 
+/*!
+ */
+ProbResult Probabilities::result(std::chrono::sys_days date) const
+{
+    ProbResult result{0, 0, 0.0, 0.0, 0.0};
+
+    if (_winningProbabilities.empty())
+    {
+        return result;
+    }
+
+    for (size_t i = 0; i < _winningProbabilities.size(); i++)
+    {
+        if (_dates[i] > date)
+            break;
+        result.expected += _winningProbabilities[i];
+        result.games++;
+        result.wins += _win[i] ? 1 : 0;
+        result.lastGame = std::chrono::year_month_day{ _dates[i] };
+    }
+
+    result.expected /= static_cast<double>(result.games);
+    result.actual = static_cast<double>(result.wins) / static_cast<double>(result.games);
+
+    double expEloDiffSum = Probabilities::_eloDifference[static_cast<uint32_t>(result.expected * 10000 + 0.5)];
+    double curEloDiffSum = Probabilities::_eloDifference[static_cast<uint32_t>(result.actual * 10000 + 0.5)];
+
+    Rating myRating(glicko::initialRating, glicko::initialDeviation, glicko::initialVolatility);
+    double eloDiffAcc = curEloDiffSum - expEloDiffSum;
+
+    if (result.games == result.wins)
+    {
+        result.normalized = 1.0;
+    }
+    else if (result.wins == 0)
+    {
+        result.normalized = 0.0;
+    }
+    else
+    {
+        result.normalized = myRating.e_star(myRating.toArray(), eloDiffAcc);
+    }
+
+    return result;
+}
+
+/*!
+ */
 void Probabilities::finalize()
 {
     _isFinalized = true;

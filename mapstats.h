@@ -68,6 +68,7 @@ struct Team
     uint32_t wins;
     double teamELO;
     double eloDifference;
+    std::chrono::year_month_day lastGame;
 
     uint32_t player1() const { return static_cast<uint32_t>(teamId & 0xFFFFFFFF); }
     uint32_t player2() const { return static_cast<uint32_t>(teamId >> 32); }
@@ -85,7 +86,7 @@ public:
     ~MapStats() = default;
 
     //! Finalize map statistics.
-    void finalize(const std::filesystem::path &directory, const Players &players);
+    void finalize(const std::filesystem::path &directory, const Players &players, std::chrono::sys_days date);
 
     //! Add a game to the stats.
     void processGame(const Game &game, const Players &players);
@@ -117,10 +118,13 @@ private:
 
     //! Teams statistics for blitz-2v2.
     std::map<uint64_t, Probabilities> _teamStats;
-    std::map<uint64_t, std::pair<double, double>> _lastTeamELOs;
+    std::map<uint64_t, std::vector<std::pair<double, double>>> _lastTeamELOs;
 
     //! Teams statistics;
     std::multiset<Team> _teams;
+
+    //! Teams statistics for the day before.
+    std::multiset<Team> _yesterdaysTeams;
 
     //! Number of games for each player on each for each month.
     //! Key of second map is the normalized map name.

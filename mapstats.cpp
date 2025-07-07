@@ -67,11 +67,12 @@ void MapStats::processGame(const Game &game, const Players &players)
         }
     }
 
-    std::chrono::year_month_day date{game.date().year(), game.date().month(), std::chrono::day{1}};
+    std::chrono::year_month_day keyDate{game.date().year(), game.date().month(), std::chrono::day{1}};
+    std::chrono::sys_days gameDate = game.sysDate();
 
-    _gameCountsPerMonthAndPlayer[date][mapName].count++;
-    _gameCountsPerMonthAndPlayer[date][mapName].differentPlayers.insert(game.userId(0));
-    _gameCountsPerMonthAndPlayer[date][mapName].differentPlayers.insert(game.userId(1));
+    _gameCountsPerMonthAndPlayer[keyDate][mapName].count++;
+    _gameCountsPerMonthAndPlayer[keyDate][mapName].differentPlayers.insert(game.userId(0));
+    _gameCountsPerMonthAndPlayer[keyDate][mapName].differentPlayers.insert(game.userId(1));
 
     // Ignore games with duration 0. These are probably manually added game, e.g. tournament games.
     if (game.duration() > 0)
@@ -136,14 +137,19 @@ void MapStats::processGame(const Game &game, const Players &players)
             std::vector<int> loserELOs = losersELOs(game);
 
             Upset upset{ game.date(), winnerIds, loserIds, mapName, winnerFactions, loserFactions, winnerELOs, loserELOs, diff };
-            _upsetsMonthly[date].insert(upset);
-            if (_upsetsMonthly[date].size() > 20)
+            _upsetsMonthly[keyDate].insert(upset);
+            if (_upsetsMonthly[keyDate].size() > 20)
             {
-                _upsetsMonthly[date].erase(std::prev(_upsetsMonthly[date].end()));
+                _upsetsMonthly[keyDate].erase(std::prev(_upsetsMonthly[keyDate].end()));
             }
 
-            auto yearBoundary = floor<std::chrono::days>(std::chrono::system_clock::now()) - std::chrono::days(365);
-            if (date >= yearBoundary)
+            std::chrono::time_point<std::chrono::system_clock, std::chrono::days> today
+                = std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
+
+            std::chrono::time_point<std::chrono::system_clock, std::chrono::days> yearBoundary
+                = today - std::chrono::days(365);
+
+            if (gameDate >= yearBoundary)
             {
                 _upsetsLast12Month.insert(upset);
             }
@@ -152,8 +158,11 @@ void MapStats::processGame(const Game &game, const Players &players)
                 _upsetsLast12Month.erase(std::prev(_upsetsLast12Month.end()));
             }
 
-            auto monthBoundary = floor<std::chrono::days>(std::chrono::system_clock::now()) - std::chrono::days(31);
-            if (date >= monthBoundary)
+            std::chrono::time_point<std::chrono::system_clock, std::chrono::days> monthBoundary
+                = today - std::chrono::days(31);
+
+
+            if (gameDate >= monthBoundary)
             {
                 _upsetsLast30Days.insert(upset);
             }
@@ -195,18 +204,21 @@ void MapStats::processGame(const Game &game, const Players &players)
         Probabilities &probsWinners = _teamStats[winnerTeamId];
         Probabilities &probsLosers = _teamStats[loserTeamId];
 
-        _lastTeamELOs[winnerTeamId].first = (winners[0].userId < winners[1].userId) ? winners[1].elo : winners[0].elo;
-        _lastTeamELOs[winnerTeamId].second = (winners[1].userId > winners[0].userId) ? winners[0].elo : winners[1].elo;
-        _lastTeamELOs[loserTeamId].first = (losers[0].userId < losers[1].userId) ? losers[1].elo : losers[0].elo;
-        _lastTeamELOs[loserTeamId].second = (losers[1].userId > losers[0].userId) ? losers[0].elo : losers[1].elo;
+        double winnerFirstElo = (winners[0].userId < winners[1].userId) ? winners[1].elo : winners[0].elo;
+        double winnerSecondElo = (winners[1].userId > winners[0].userId) ? winners[0].elo : winners[1].elo;
+        _lastTeamELOs[winnerTeamId].push_back({winnerFirstElo, winnerSecondElo});
+
+        double loserFirstElo = (losers[0].userId < losers[1].userId) ? losers[1].elo : losers[0].elo;
+        double loserSecondElo = (losers[1].userId > losers[0].userId) ? losers[0].elo : losers[1].elo;
+        _lastTeamELOs[loserTeamId].push_back({loserFirstElo, loserSecondElo});
 
         Rating winnerRating(winners[0].elo + winners[1].elo, winners[0].deviation + winners[1].deviation, glicko::initialVolatility);
         Rating losersRating(losers[0].elo + losers[1].elo, losers[0].deviation + losers[1].deviation, glicko::initialVolatility);
 
         double expectedWinRate = winnerRating.e_star(losersRating.toArray(), 0.0);
 
-        probsWinners.addGame(expectedWinRate, 1);
-        probsLosers.addGame(1.0 - expectedWinRate, 0);
+        probsWinners.addGame(expectedWinRate, game.sysDate(), 1);
+        probsLosers.addGame(1.0 - expectedWinRate, game.sysDate(), 0);
     }
 
     // Process longest games.
@@ -270,7 +282,7 @@ void MapStats::processGame(const Game &game, const Players &players)
             return;
         }
 
-        _mapStats[factionSetup][mapName].addGame(expectedWinRate, (game.winnerIndex() == static_cast<int>(alliedPlayerIndex)));
+        _mapStats[factionSetup][mapName].addGame(expectedWinRate, game.sysDate(), (game.winnerIndex() == static_cast<int>(alliedPlayerIndex)));
     }
     else if (factionSetup == factions::AvY)
     {
@@ -291,7 +303,7 @@ void MapStats::processGame(const Game &game, const Players &players)
             return;
         }
 
-        _mapStats[factionSetup][mapName].addGame(expectedWinRate, (game.winnerIndex() == static_cast<int>(alliedPlayerIndex)));
+        _mapStats[factionSetup][mapName].addGame(expectedWinRate, game.sysDate(), (game.winnerIndex() == static_cast<int>(alliedPlayerIndex)));
     }
     else if (factionSetup == factions::YvS)
     {
@@ -312,13 +324,14 @@ void MapStats::processGame(const Game &game, const Players &players)
             return;
         }
 
-        _mapStats[factionSetup][mapName].addGame(expectedWinRate, (game.winnerIndex() == static_cast<int>(yuriPlayerIndex)));
+        _mapStats[factionSetup][mapName].addGame(expectedWinRate, game.sysDate(), (game.winnerIndex() == static_cast<int>(yuriPlayerIndex)));
     }
-}
+
+} // void MapStats::processGame(const Game &game, const Players &players)
 
 /*!
  */
-void MapStats::finalize(const std::filesystem::path &directory, const Players &players)
+void MapStats::finalize(const std::filesystem::path &directory, const Players &players, std::chrono::sys_days date)
 {
     Log::info() << "Finalizing map statistics.";
 
@@ -326,20 +339,36 @@ void MapStats::finalize(const std::filesystem::path &directory, const Players &p
 
     static std::vector<factions::Setup> factionSetups = { factions::AvS, factions::AvY, factions::YvS };
 
+    Log::info() << "Creating team stats.";
+
     for (std::map<uint64_t, Probabilities>::iterator it = _teamStats.begin(); it != _teamStats.end(); ++it)
     {
         uint64_t key = it->first;
         Probabilities &value = it->second;
         value.finalize();
+        ProbResult probToday = value.result(date);
+        ProbResult probYesterday = value.result(date - std::chrono::days{3});
         uint32_t player1 = static_cast<uint32_t>(key & 0xFFFFFFFF);
         uint32_t player2 = static_cast<uint32_t>(key >> 32);
 
-        // Exclude teams where no player has ELO > 1400.
-        if (value.count() > 20 && players[player1].isActive() && players[player2].isActive() && value.wins() > 1 &&
-            value.count() != value.wins() &&
-            (players[player1].elo(factions::Combined) > 1400 || players[player2].elo(factions::Combined) > 1400))
+        auto eloDiff = [](const ProbResult &result) -> double {
+            return -400.0 * std::log10((1.0 / result.normalized) - 1.0);
+        };
+        // Exclude teams where no player has ELO > 1300.
+        if (probToday.games >= 20 && players[player1].isActive() && players[player2].isActive() && probToday.wins > 1 &&
+            probToday.games != probToday.wins &&
+            (players[player1].elo(factions::Combined) > 1300 || players[player2].elo(factions::Combined) > 1300))
         {
-            _teams.insert({key, value.count(), value.wins(), players[player1].elo(factions::Combined) + players[player2].elo(factions::Combined), value.eloDifference() });
+            Log::info() << players[player1].alias() << " + " << players[player2].alias() << " " << probToday.games << "/" << probToday.wins << " " << probToday.actual << "/" << probToday.expected;
+            _teams.insert({key, probToday.games, probToday.wins, players[player1].elo(factions::Combined) + players[player2].elo(factions::Combined), eloDiff(probToday), probToday.lastGame });
+        }
+
+        if (probYesterday.games >= 20 && players[player1].isActive() && players[player2].isActive() && probYesterday.wins > 1 &&
+            probYesterday.games != probYesterday.wins &&
+            (players[player1].elo(factions::Combined) > 1300 || players[player2].elo(factions::Combined) > 1300))
+        {
+            Log::info() << players[player1].alias() << " + " << players[player2].alias() << " " << probYesterday.games << "/" << probYesterday.wins << " " << probYesterday.actual << "/" << probYesterday.expected;
+            _yesterdaysTeams.insert({key, probYesterday.games, probYesterday.wins, players[player1].elo(factions::Combined) + players[player2].elo(factions::Combined), eloDiff(probYesterday), probYesterday.lastGame });
         }
     }
 
@@ -655,6 +684,12 @@ void MapStats::exportLongestGames(const std::filesystem::path &directory, const 
 
     for (auto it = _longestGames.begin(); it != _longestGames.end(); ++it)
     {
+        if (it->winners.empty() || it->losers.empty())
+        {
+            Log::error() << "No winners or losers while exporting longest game.";
+            continue;
+        }
+
         json jLongestGame = json::object();
         jLongestGame["rank"] = rank++;
         jLongestGame["date"] = stringtools::fromDate(it->date);
@@ -673,6 +708,8 @@ void MapStats::exportLongestGames(const std::filesystem::path &directory, const 
     std::ofstream streamLongest(directory / (gamemodes::shortName(_gameMode) + "_longest_games.json"));
     streamLongest << std::setw(4) << jLongestGames << std::endl;
     streamLongest.close();
+
+    Log::verbose() << "Exported longest games.";
 }
 
 /*!
@@ -683,14 +720,18 @@ void MapStats::exportBestTeams(const std::filesystem::path &directory, const Pla
 
     json data = json::object();
 
-    data["description"] = "Top 20 teams with the highest performance above predicted ELO";
+    data["description"] = "Top 40 teams with the highest performance above predicted ELO";
     data["columns"] = json::array({
         { { "index", 0 }, { "header", "#" } , { "name", "rank" } },
-        { { "index", 1 }, { "header", "Names" } , { "name", "names" } },
-        { { "index", 2 }, { "header", "Games" } , { "name", "games" } },
-        { { "index", 3 }, { "header", "Team ELO" } , { "name", "elo_team" } },
-        { { "index", 4 }, { "header", "Performance" } , { "name", "performance" } },
-        { { "index", 5 }, { "header", "Difference" } , { "name", "diff" }, { "info", "Performance above team ELO."} }
+        { { "index", 1 }, { "header", "∆ #" } , { "name", "delta_rank" } },
+        { { "index", 2 }, { "header", "Names" } , { "name", "names" } },
+        { { "index", 3 }, { "header", "Games" } , { "name", "games" } },
+        { { "index", 4 }, { "header", "∆ Games" } , { "name", "delta_gamesplayed" } },
+        { { "index", 5 }, { "header", "Last game" } , { "name", "last_game" } },
+        { { "index", 6 }, { "header", "Team ELO" } , { "name", "elo_team" } },
+        { { "index", 7 }, { "header", "Performance" } , { "name", "performance" } },
+        { { "index", 8 }, { "header", "Difference" } , { "name", "diff" }, { "info", "Performance above team ELO."} },
+        { { "index", 9 }, { "header", "∆" } , { "name", "delta_diff" }, { "info", "Performance above team ELO change since the day before."} }
     });
 
     int rank = 1;
@@ -701,8 +742,10 @@ void MapStats::exportBestTeams(const std::filesystem::path &directory, const Pla
     {
         json jTeam = json::object();
         jTeam["rank"] = rank++;
-        uint32_t elo1 = static_cast<uint32_t>(std::round(_lastTeamELOs[team.teamId].first));
-        uint32_t elo2 = static_cast<uint32_t>(std::round(_lastTeamELOs[team.teamId].second));
+        jTeam["last_game"] = stringtools::fromDate(team.lastGame);
+
+        uint32_t elo1 = static_cast<uint32_t>(std::round(_lastTeamELOs[team.teamId][team.games - 1].first));
+        uint32_t elo2 = static_cast<uint32_t>(std::round(_lastTeamELOs[team.teamId][team.games - 1].second));
 
         std::string player1 = players[team.player1()].alias() + " (" + std::to_string(elo1)  + ")";
         std::string player2 = players[team.player2()].alias() + " (" + std::to_string(elo2)  + ")";
@@ -711,9 +754,31 @@ void MapStats::exportBestTeams(const std::filesystem::path &directory, const Pla
         jTeam["games"] = std::to_string(team.games);
         jTeam["performance"] = std::to_string(elo1 + elo2 + static_cast<uint32_t>(std::round(team.eloDifference)));
         jTeam["diff"] = std::to_string(static_cast<uint32_t>(std::round(team.eloDifference)));
+
+        int deltaRank = 0;
+        int deltaGames = 0;
+        int deltaDiff = 0;
+        int currentRank = 0;
+        for (const Team &yesterdayTeam : _yesterdaysTeams)
+        {
+            currentRank++;
+            if (yesterdayTeam.teamId == team.teamId)
+            {
+                deltaRank = currentRank - (rank - 1);
+                deltaGames = team.games - yesterdayTeam.games;
+                deltaDiff = team.eloDifference - yesterdayTeam.eloDifference;
+                break;
+            }
+        }
+
+
+        jTeam["delta_rank"] = deltaRank;
+        jTeam["delta_gamesplayed"] = deltaGames;
+        jTeam["delta_diff"] = deltaDiff;
+
         jTeams.push_back(jTeam);
 
-        if (rank == 21)
+        if (rank == 31)
             break;
     }
 
@@ -726,6 +791,8 @@ void MapStats::exportBestTeams(const std::filesystem::path &directory, const Pla
         stream << std::setw(4) << data << std::endl;
         stream.close();
     }
+
+    Log::verbose() << "Exported best teams.";
 }
 
 
@@ -746,8 +813,13 @@ void MapStats::exportUpsets(const std::filesystem::path &directory, const Player
     }
 
     exportUpsets(directory, _upsetsLast12Month, gamemodes::shortName(_gameMode) + "_upsets_last12month.json", "Upsets within the last 12 month", players);
+    Log::verbose() << "Exported biggest upsets of the last 12 month.";
+
     exportUpsets(directory, _upsetsLast30Days, gamemodes::shortName(_gameMode) + "_upsets_last30days.json", "Upsets within the last 30 days", players);
+    Log::verbose() << "Exported biggest upsets of the last 30 days.";
+
     exportUpsets(directory, _upsetsAllTime, gamemodes::shortName(_gameMode) + "_upsets_alltime.json", "Biggest upsets of all time", players);
+    Log::verbose() << "Exported biggest upsets of all time..";
 }
 
 /*!

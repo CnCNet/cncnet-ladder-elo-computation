@@ -200,6 +200,16 @@ std::chrono::year_month_day Game::date() const
 
 /*!
  */
+std::chrono::sys_days Game::sysDate() const
+{
+    using namespace std::chrono;
+    auto date = this->date();
+
+    return sys_days{ year{ date.year() } / month{ date.month() } / day{ date.day() } };
+}
+
+/*!
+ */
 /*
 std::tuple<std::chrono::year_month_day, std::chrono::hh_mm_ss<std::chrono::seconds>> Game::dateTime() const
 {

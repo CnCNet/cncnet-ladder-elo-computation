@@ -145,6 +145,9 @@ public:
     //! Get the date from the game.
     std::chrono::year_month_day date() const;
 
+    //! Get the system date from the game.
+    std::chrono::sys_days sysDate() const;
+
     //! Get the exact timestamp of the game.
     //std::tuple<std::chrono::year_month_day, std::chrono::hh_mm_ss<std::chrono::seconds>> dateTime() const;
 

@@ -214,34 +214,38 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
 
     data["columns"] = json::array({
         { { "index", 0 }, { "header", "#" } , { "name", "rank" } },
-        { { "index", 1 }, { "header", "" } , { "name", "faction" }, { "info", "Indicating if your allied, soviet" + yuri + " or combined rating is your best." } },
-        { { "index", 2 }, { "header", "Name" } , { "name", "name" } },
-        { { "index", 3 }, { "header", "Elo" } , { "name", "elo" }, { "info", "Your current ELO." } },
-        { { "index", 4 }, { "header", "Deviation" } , { "name", "deviation" }, { "info", "Your current deviation. The lower the deviation the more accurate is your rating. You need to have a deviation less than about 100 to be considered an active player. The deviation grows if you don't play." } },
-        { { "index", 5 }, { "header", "Games" } , { "name", "game_count" }, { "info", "Total number of games played." } },
-        { { "index", 5 }, { "header", "DTI" } , { "name", "days_to_inactivity" }, { "info", "Days to inactivity. If you stop playing today, you will be considered an inactive player after this amount of days." } },
-        { { "index", 6 }, { "header", "Elo" } , { "name", "sov_elo" } },
-        { { "index", 7 }, { "header", "Deviation" } , { "name", "sov_deviation" } },
-        { { "index", 8 }, { "header", "Games" } , { "name", "sov_games" } },
-        { { "index", 9 }, { "header", "Elo" } , { "name", "all_elo" } },
-        { { "index", 10 }, { "header", "Deviation" } , { "name", "all_deviation" } },
-        { { "index", 11 }, { "header", "Games" } , { "name", "all_games" } }
+        { { "index", 1 }, { "header", "∆ #" } , { "name", "delta_rank" } },
+        { { "index", 2 }, { "header", "" } , { "name", "faction" }, { "info", "Indicating if your allied, soviet" + yuri + " or combined rating is your best." } },
+        { { "index", 3 }, { "header", "Name" } , { "name", "name" } },
+        { { "index", 4 }, { "header", "Elo" } , { "name", "elo" }, { "info", "Your current ELO." } },
+        { { "index", 5 }, { "header", "∆ Elo" } , { "name", "delta_elo" }, { "info", "ELO change since the day before." } },
+        { { "index", 6 }, { "header", "Deviation" } , { "name", "deviation" }, { "info", "Your current deviation. The lower the deviation the more accurate is your rating. You need to have a deviation less than about 100 to be considered an active player. The deviation grows if you don't play." } },
+        { { "index", 7 }, { "header", "Games" } , { "name", "game_count" }, { "info", "Total number of games played." } },
+        { { "index", 8 }, { "header", "DTI" } , { "name", "days_to_inactivity" }, { "info", "Days to inactivity. If you stop playing today, you will be considered an inactive player after this amount of days." } },
+        { { "index", 9 }, { "header", "Elo" } , { "name", "sov_elo" } },
+        { { "index", 10 }, { "header", "Deviation" } , { "name", "sov_deviation" } },
+        { { "index", 11 }, { "header", "Games" } , { "name", "sov_games" } },
+        { { "index", 12 }, { "header", "Elo" } , { "name", "all_elo" } },
+        { { "index", 13 }, { "header", "Deviation" } , { "name", "all_deviation" } },
+        { { "index", 14 }, { "header", "Games" } , { "name", "all_games" } }
     });
 
     if (gameMode == gamemodes::YurisRevenge)
     {
-        data["columns"].push_back({ { "index", 9 }, { "header", "Elo" } , { "name", "yur_elo" } });
-        data["columns"].push_back({ { "index", 10 }, { "header", "Deviation" } , { "name", "yur_deviation" } });
-        data["columns"].push_back({ { "index", 11 }, { "header", "Games" } , { "name", "yur_games" } });
+        data["columns"].push_back({ { "index", 15 }, { "header", "Elo" } , { "name", "yur_elo" } });
+        data["columns"].push_back({ { "index", 16 }, { "header", "Deviation" } , { "name", "yur_deviation" } });
+        data["columns"].push_back({ { "index", 17 }, { "header", "Games" } , { "name", "yur_games" } });
     }
 
     std::vector<const Player*> filteredAndSortedPlayers;
+    std::vector<const Player*> filteredAndSortedPlayersYesterday;
 
     for (auto it = _players.cbegin(); it != _players.cend(); ++it)
     {
         if (it->second.isActive())
         {
             filteredAndSortedPlayers.push_back(&(it->second));
+            filteredAndSortedPlayersYesterday.push_back(&(it->second));
         }
     }
 
@@ -250,21 +254,37 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
     {
         std::sort(filteredAndSortedPlayers.begin(), filteredAndSortedPlayers.end(),
                   [] (const Player *a, const Player *b) { return a->elo(factions::Combined) > b->elo(factions::Combined);});
+        std::sort(filteredAndSortedPlayersYesterday.begin(), filteredAndSortedPlayersYesterday.end(),
+                  [] (const Player *a, const Player *b) { return a->yesterdaysElo(factions::Combined) > b->yesterdaysElo(factions::Combined);});
     }
     else
     {
         std::sort(filteredAndSortedPlayers.begin(), filteredAndSortedPlayers.end(),
                   [] (const Player *a, const Player *b) { return a->maxRating() > b->maxRating();});
+        std::sort(filteredAndSortedPlayersYesterday.begin(), filteredAndSortedPlayersYesterday.end(),
+                  [] (const Player *a, const Player *b) { return a->yesterdaysMaxRating() > b->yesterdaysMaxRating();});
     }
 
     json players = json::array();
 
-    for (int i = 0; i < filteredAndSortedPlayers.size(); i++)
+    for (size_t i = 0; i < filteredAndSortedPlayers.size(); i++)
     {
         json jsonPlayer = json::object();
         const Player *player = filteredAndSortedPlayers[i];
 
+        // Now look for this particular player in the other vector.
+        int rankYesterday = 0;
+        for (size_t j = 0; j < filteredAndSortedPlayersYesterday.size(); j++)
+        {
+            if (filteredAndSortedPlayersYesterday[j] == player)
+            {
+                rankYesterday = static_cast<int>(j + 1);
+                break;
+            }
+        }
+
         jsonPlayer["rank"] = i + 1;
+        jsonPlayer["delta_rank"] = rankYesterday - static_cast<int>(i + 1);
         jsonPlayer["name"] = player->alias();
 
         factions::Faction faction = (gameMode == gamemodes::Blitz2v2) ? factions::Combined : player->getBestActiveFaction();
@@ -273,12 +293,14 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
         std::ostringstream oss;
         if (gameMode == gamemodes::Blitz2v2)
         {
-            jsonPlayer["elo"] = std::to_string(static_cast<int>(player->elo(factions::Combined)));
+            jsonPlayer["elo"] = static_cast<int>(player->elo(factions::Combined));
+            jsonPlayer["delta_elo"] = static_cast<int>(player->elo(factions::Combined) - player->yesterdaysElo(factions::Combined));
             oss << std::fixed << std::setprecision(1) << player->deviation(factions::Combined);
         }
         else
         {
-            jsonPlayer["elo"] = std::to_string(static_cast<int>(player->elo(faction)));
+            jsonPlayer["elo"] = static_cast<int>(player->elo(faction));
+            jsonPlayer["delta_elo"] = static_cast<int>(player->elo(faction) - player->yesterdaysElo(faction));
             oss << std::fixed << std::setprecision(1) << player->deviation(faction);
         }
 

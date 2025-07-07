@@ -2,9 +2,20 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include <vector>
+
+struct ProbResult
+{
+    uint32_t games;
+    uint32_t wins;
+    double expected;
+    double actual;
+    double normalized;
+    std::chrono::year_month_day lastGame;
+};
 
 class Probabilities
 {
@@ -21,8 +32,11 @@ public:
     //! Get the number of total games played.
     uint32_t count() const;
 
+    //! Get the result for all games up to (including) the given date.
+    ProbResult result(std::chrono::sys_days date) const;
+
     //! Add a win with the given winning probability.
-    void addGame(double winningProbability, bool isWin);
+    void addGame(double winningProbability, std::chrono::sys_days date, bool isWin);
 
     //! Is this calculation finalized?
     bool isFinalized() const;
@@ -46,6 +60,12 @@ private:
     //! Winning probabilities for each game. Will be e
     //! valuated during finalization.
     std::vector<double> _winningProbabilities;
+
+    //! The dates of the games.
+    std::vector<std::chrono::sys_days> _dates;
+
+    //! Wins and losses.
+    std::vector<bool> _win;
 
     //! Number of wins.
     uint32_t _wins = 0;
@@ -74,3 +94,4 @@ extern bool operator<(std::pair<uint32_t, Probabilities> a, std::pair<uint32_t, 
 extern bool operator<(std::pair<uint32_t, const Probabilities&> a, std::pair<uint32_t, const Probabilities&> b);
 extern bool operator<(std::pair<std::string, Probabilities> a, std::pair<std::string, Probabilities> b);
 extern bool operator<(std::pair<std::string, const Probabilities&> a, std::pair<std::string, const Probabilities&> b);
+

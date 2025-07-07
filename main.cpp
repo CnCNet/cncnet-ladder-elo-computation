@@ -282,10 +282,10 @@ int main(int argc, char* argv[])
         std::chrono::milliseconds timestamp = std::chrono::milliseconds(static_cast<uint64_t>(game->timestamp() + game->duration()) * 1000);
         std::chrono::system_clock::time_point currentTimePoint = std::chrono::system_clock::time_point(timestamp);
 
-        // Days will be switches at UTC+5. So EST is the time zone for flipping days. The game time will still stay
+        // Days will be switches at UTC+9. So AKST is the time zone for flipping days. The game time will still stay
         // UTC, but for historical ELO, peak rating, etc... the ELO is taken at this specific time. For the locally
         // generated ELO list it was supposed to be UTC+1, but was UTC-1 by accident.
-        std::chrono::system_clock::time_point shiftedTime = currentTimePoint - std::chrono::hours(5);
+        std::chrono::system_clock::time_point shiftedTime = currentTimePoint - std::chrono::hours(9);
         std::chrono::time_point<std::chrono::system_clock, std::chrono::days> date = floor<std::chrono::days>(shiftedTime);
 
         Log::verbose() << "Shifted time of game " << game->id() << " from "
@@ -325,9 +325,16 @@ int main(int argc, char* argv[])
     } // for (Game *game : validGames)
 
     // Process the last day.
-    players.update();
-    players.apply(lastDate, true, options.gameMode);
+    if (options.allGames)
+    {
+        players.update();
+        players.apply(lastDate, true, options.gameMode);
+        currentDate = lastDate;
+    }
+
     players.finalize();
+
+    Log::info() << "Last day taken into account: " << currentDate;
 
     if (!options.dryRun)
     {
@@ -353,7 +360,7 @@ int main(int argc, char* argv[])
 
     Log::info() << "Processed " << validGames.size() << " games. About to finalize stats.";
 
-    stats.finalize(options.outputDirectory, players);
+    stats.finalize(options.outputDirectory, players, floor<std::chrono::days>(std::chrono::system_clock::now()) - std::chrono::days{1});
     stats.exportUpsets(options.outputDirectory, players);
     stats.exportLongestGames(options.outputDirectory, players);
     stats.exportBestTeams(options.outputDirectory, players);

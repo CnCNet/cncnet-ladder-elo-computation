@@ -155,6 +155,7 @@ public:
         return *this;
     }
 
+    //! Output formatted date.
     Log& operator<<(const std::chrono::year_month_day &date)
     {
         if (Log::_enabled)
@@ -170,6 +171,18 @@ public:
                 _os << "0";
 
             _os << static_cast<unsigned>(date.day());
+        }
+        return *this;
+    }
+
+    //! Output formatted date.
+    Log& operator<<(const std::chrono::time_point<std::chrono::system_clock, std::chrono::days> &tp)
+    {
+        if (Log::_enabled)
+        {
+            std::chrono::sys_days sd = tp;
+            std::chrono::year_month_day ymd{sd};
+            *this << ymd;
         }
         return *this;
     }

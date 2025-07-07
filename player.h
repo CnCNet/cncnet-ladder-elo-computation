@@ -129,6 +129,9 @@ public:
     //! Get the rating of the player.
     double elo(factions::Faction faction) const;
 
+    //! Get yesterdays rating of the player.
+    double yesterdaysElo(factions::Faction faction) const;
+
     //! Get the rating deviation of the player.
     double deviation(factions::Faction faction) const;
 
@@ -172,6 +175,10 @@ public:
     //! Get the maximum rating for this players. Return the rating of
     //! the highest active rating.
     double maxRating(bool includeInactive = false) const;
+
+    //! Get the maximum rating for this players. Return the rating of
+    //! the highest active rating.
+    double yesterdaysMaxRating(bool includeInactive = false) const;
 
     //! Check if a specific faction is active.
     bool isActive(factions::Faction faction) const;
@@ -264,6 +271,9 @@ private:
 
     //! The ratings for each faction.
     std::array<Rating, factions::count()> _ratings;
+
+    //! Yesterdays rating for each faction.
+    std::array<Rating, factions::count()> _yesterdaysRatings;
 
     //! A combined rating used for the deviation to track if
     //! a player is active or inactive.

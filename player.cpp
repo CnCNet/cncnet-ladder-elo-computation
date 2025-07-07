@@ -155,6 +155,13 @@ double Player::elo(factions::Faction faction) const
 
 /*!
  */
+double Player::yesterdaysElo(factions::Faction faction) const
+{
+    return _yesterdaysRatings[faction].rating() * glicko::scaleFactor + glicko::initialRating;
+}
+
+/*!
+ */
 bool Player::isActive(factions::Faction faction) const
 {
     // Because entries are alternatining dates when players goes active/inactive,
@@ -193,6 +200,27 @@ double Player::maxRating(bool includeInactive) const
         else if (includeInactive && this->wasActive(factions::toFaction(i)))
         {
             result = std::max(result, this->elo(factions::toFaction(i)));
+        }
+    }
+
+    return result;
+}
+
+/*!
+ */
+double Player::yesterdaysMaxRating(bool includeInactive) const
+{
+    double result = -1.0;
+
+    for (size_t i = 0; i < _factionStatusList.size(); i++)
+    {
+        if (this->isActive(factions::toFaction(i)))
+        {
+            result = std::max(result, this->yesterdaysElo(factions::toFaction(i)));
+        }
+        else if (includeInactive && this->wasActive(factions::toFaction(i)))
+        {
+            result = std::max(result, this->yesterdaysElo(factions::toFaction(i)));
         }
     }
 
@@ -353,6 +381,8 @@ Rating::CalculationType Player::update()
  */
 void Player::apply(std::chrono::year_month_day date, bool decay, gamemodes::GameMode gameMode)
 {
+     _yesterdaysRatings = _ratings;
+
     for (size_t i = 0; i < _ratings.size(); i++)
     {
         factions::Faction faction = factions::toFaction(i);
@@ -733,7 +763,7 @@ void Player::processGame(const Game& game, int index, bool instantProcessing, co
         Rating myRating(game.rating(index), game.deviation(index), glicko::initialVolatility);
         Rating otherRating(game.rating(index ^ 1), game.deviation(index ^ 1), glicko::initialVolatility);
         double expectedWinningPercentage = myRating.e_star(otherRating.toArray(), 0.0);
-        probs.addGame(expectedWinningPercentage, (game.winnerIndex() == index));
+        probs.addGame(expectedWinningPercentage, game.sysDate(), game.winnerIndex() == index);
 
         // Map statistics (currently only for blitz).
         int mapIndex = blitzmap::toIndex(game.mapName());
@@ -742,7 +772,7 @@ void Player::processGame(const Game& game, int index, bool instantProcessing, co
             factions::Setup setup = factions::fromFactions(game.faction(index), game.faction(index ^ 1));
             Probabilities &probs = _mapStats[setup][mapIndex];
             double expectedWinRate = myRating.e_star(otherRating.toArray(), 0.0);
-            probs.addGame(expectedWinRate, game.winnerIndex() == index);
+            probs.addGame(expectedWinRate, game.sysDate(), game.winnerIndex() == index);
         }
     }
 }

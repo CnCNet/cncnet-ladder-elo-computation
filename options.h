@@ -34,6 +34,7 @@ public:
     std::filesystem::path tournamentFile;
     bool dryRun;
     bool exportFullStats;
+    bool allGames;
 
 private:
     std::string host;

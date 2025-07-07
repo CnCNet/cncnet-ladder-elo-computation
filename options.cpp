@@ -16,6 +16,7 @@ Options::Options(int argc, char* argv[])
         ("h,help", "Show help.")
         ("d,dry-run", "Run without writing any results (test mode).")
         ("s,statistics", "Export additional player and map statistics.")
+        ("a,all-games", "Include todays games.")
         ("l,log-level", "Set the log level (debug, verbose, info, warning, error, critical, fatal).",
          cxxopts::value<std::string>()->default_value("verbose"))
         ("m,gamemode", "Set the game mode. Every available ladder abbreviation is valid.",
@@ -118,6 +119,7 @@ Options::Options(int argc, char* argv[])
     }
 
     dryRun = result["dry-run"].as<bool>();
+    allGames = result["all-games"].as<bool>();
     exportFullStats = result["statistics"].as<bool>();
 
     if (mySqlUser().empty())
