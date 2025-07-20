@@ -165,6 +165,20 @@ void Players::update()
 
 /*!
  */
+bool Players::hasPendingGames() const
+{
+    bool hasPendingGames = false;
+
+    for (std::map<uint32_t, Player>::const_iterator it = _players.begin(); it != _players.end() && !hasPendingGames; ++it)
+    {
+        hasPendingGames |= (it->second.pendingGameCount() > 0);
+    }
+
+    return hasPendingGames;
+}
+
+/*!
+ */
 void Players::apply(std::chrono::year_month_day date, bool decay, gamemodes::GameMode gameMode)
 {
     for (std::map<uint32_t, Player>::iterator it = _players.begin(); it != _players.end(); ++it)
@@ -221,20 +235,18 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
         { { "index", 5 }, { "header", "∆ Elo" } , { "name", "delta_elo" }, { "info", "ELO change since the day before." } },
         { { "index", 6 }, { "header", "Deviation" } , { "name", "deviation" }, { "info", "Your current deviation. The lower the deviation the more accurate is your rating. You need to have a deviation less than about 100 to be considered an active player. The deviation grows if you don't play." } },
         { { "index", 7 }, { "header", "Games" } , { "name", "game_count" }, { "info", "Total number of games played." } },
-        { { "index", 8 }, { "header", "DTI" } , { "name", "days_to_inactivity" }, { "info", "Days to inactivity. If you stop playing today, you will be considered an inactive player after this amount of days." } },
-        { { "index", 9 }, { "header", "Elo" } , { "name", "sov_elo" } },
-        { { "index", 10 }, { "header", "Deviation" } , { "name", "sov_deviation" } },
+        { { "index", 8 }, { "header", "∆ Games" } , { "name", "game_diff" }, { "info", "Games played yesterday." } },
+        { { "index", 9 }, { "header", "DTI" } , { "name", "days_to_inactivity" }, { "info", "Days to inactivity. If you stop playing today, you will be considered an inactive player after this amount of days." } },
+        { { "index", 10 }, { "header", "Elo/Dev." } , { "name", "sov_elo_deviation" } },
         { { "index", 11 }, { "header", "Games" } , { "name", "sov_games" } },
-        { { "index", 12 }, { "header", "Elo" } , { "name", "all_elo" } },
-        { { "index", 13 }, { "header", "Deviation" } , { "name", "all_deviation" } },
-        { { "index", 14 }, { "header", "Games" } , { "name", "all_games" } }
+        { { "index", 12 }, { "header", "Elo/Dev." } , { "name", "all_elo_deviation" } },
+        { { "index", 13 }, { "header", "Games" } , { "name", "all_games" } }
     });
 
     if (gameMode == gamemodes::YurisRevenge)
     {
-        data["columns"].push_back({ { "index", 15 }, { "header", "Elo" } , { "name", "yur_elo" } });
-        data["columns"].push_back({ { "index", 16 }, { "header", "Deviation" } , { "name", "yur_deviation" } });
-        data["columns"].push_back({ { "index", 17 }, { "header", "Games" } , { "name", "yur_games" } });
+        data["columns"].push_back({ { "index", 14 }, { "header", "Elo/Deviation" } , { "name", "yur_elo_deviation" } });
+        data["columns"].push_back({ { "index", 15 }, { "header", "Games" } , { "name", "yur_games" } });
     }
 
     std::vector<const Player*> filteredAndSortedPlayers;
@@ -307,6 +319,7 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
         jsonPlayer["deviation"] = oss.str();
         jsonPlayer["days_to_inactivity"] = player->daysToInactivity(gameMode);
         jsonPlayer["game_count"] = player->gameCount();
+        jsonPlayer["game_diff"] = player->gameCount() - player->yesterdaysGameCount();
         jsonPlayer["active"] = player->isActive();
 
         PeakRating peak = player->peakRating();
@@ -332,10 +345,9 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
 
             if (player->gameCount(faction) > 0)
             {
-                jsonPlayer[factions::shortName(faction) + "_elo"] = std::to_string(static_cast<int>(player->elo(faction)));
                 std::ostringstream oss;
-                oss << std::fixed << std::setprecision(1) << player->deviation(faction);
-                jsonPlayer[factions::shortName(faction) + "_deviation"] = oss.str();
+                oss << static_cast<int>(player->elo(faction)) << " ± " << std::fixed << std::setprecision(1) << player->deviation(faction);
+                jsonPlayer[factions::shortName(faction) + "_elo_deviation"] = oss.str();
                 jsonPlayer[factions::shortName(faction) + "_games"] = player->gameCount(faction);
             }
         }
@@ -363,7 +375,8 @@ void Players::exportBestOfAllTime(
     for (auto it = _players.cbegin(); it != _players.cend(); ++it)
     {
         const Player &player = it->second;
-        if (player.peakRating().adjustedElo > 0.0)
+        PeakRating peak = (gameMode == gamemodes::Blitz2v2) ? player.peakRating(factions::Combined) : player.peakRating();
+        if (peak.adjustedElo > 0.0)
         {
             filteredAndSortedPlayers.push_back(&player);
         }

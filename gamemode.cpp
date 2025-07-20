@@ -1,4 +1,5 @@
 
+#include "cplusplus.h"
 #include "gamemode.h"
 #include "rating.h"
 
@@ -123,14 +124,8 @@ double maxDeviationAfterActive(GameMode gameMode)
  */
 double deviationThresholdActive(GameMode gameMode, double currentElo)
 {
-    if (gameMode == GameMode::YurisRevenge)
-    {
-        return 65.0 + sqrt(abs(glicko::initialRating - currentElo));
-    }
-    else
-    {
-        return 65.0 + sqrt(abs(glicko::initialRating - currentElo));
-    }
+    dts::unused(gameMode);
+    return std::min(75.0, 65.0 + sqrt(abs(glicko::initialRating - currentElo)));
 }
 
 /*!

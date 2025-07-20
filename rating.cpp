@@ -177,6 +177,15 @@ double Rating::volatility(const std::vector<std::array<double, 3>> &opponents, c
     return exp(A / 2.0);
 }
 
+/*!
+ */
+uint32_t Rating::gameCount() const
+{
+    return _totalGames;
+}
+
+/*!
+ */
 void Rating::updateWithNoWin(
     const std::vector<std::array<double, 3>>& opponents,
     const std::vector<double>& results,
@@ -210,6 +219,8 @@ void Rating::updateWithNoWin(
     }
 }
 
+/*!
+ */
 void Rating::updateWithFirstWin(
     const std::vector<std::array<double, 3>>& opponents,
     const std::vector<double>& results,
@@ -245,6 +256,8 @@ void Rating::updateWithFirstWin(
     }
 }
 
+/*!
+ */
 void Rating::updateNormally(const std::vector<std::array<double, 3>>& opponents, const std::vector<double>& results)
 {
     double variance = this->variance(opponents);
@@ -261,15 +274,14 @@ void Rating::updateNormally(const std::vector<std::array<double, 3>>& opponents,
     }
 
     _pendingRating += (pow(_pendingDeviation, 2) * ratingDeviationSum);
-
-    _pendingGames++;
-    _games++;
 }
 
 /*!
  */
 Rating::CalculationType Rating::update(const std::vector<std::array<double, 3>>& opponents, const std::vector<double>& results, CalculationType calculationType)
 {
+    _pendingGames += opponents.size();
+
     if (eloDeviation() < 200.0 || calculationType == CalculationType::Normal)
     {
         updateNormally(opponents, results);
@@ -308,22 +320,14 @@ Rating::CalculationType Rating::update(const std::vector<std::array<double, 3>>&
  */
 void Rating::decay(bool wasActive, double factor, double maxDeviationAfterActive)
 {
-    if (_games == 0)
-    {
-        // Convert internal deviation to true deviation.
-        double trueDeviation = deviation() * glicko::scaleFactor;
+    // Convert internal deviation to true deviation.
+    double trueDeviation = deviation() * glicko::scaleFactor;
 
-        // This is a custom deviation function.
-        trueDeviation = std::min(wasActive ? maxDeviationAfterActive : 350.0, trueDeviation + (std::pow(std::log(trueDeviation) / std::log(factor), factor) / 100.0f));
+    // This is a custom deviation function.
+    trueDeviation = std::min(wasActive ? maxDeviationAfterActive : 350.0, trueDeviation + (std::pow(std::log(trueDeviation) / std::log(factor), factor) / 100.0f));
 
-        // Back to internal deviation.
-        _deviation = trueDeviation / glicko::scaleFactor;
-    }
-    else
-    {
-        // Just reset the number of games played.
-        _games = 0;
-    }
+    // Back to internal deviation.
+    _deviation = trueDeviation / glicko::scaleFactor;
 }
 
 /*!
@@ -333,6 +337,7 @@ void Rating::apply()
     _volatility = _pendingVolatility;
     _deviation = _pendingDeviation;
     _rating = _pendingRating;
+    _totalGames += _pendingGames;
     _pendingGames = 0;
 }
 

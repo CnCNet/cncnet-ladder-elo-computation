@@ -79,6 +79,9 @@ public:
     //! Get the current volatility.
     double volatility() const;
 
+    //! Get the game count. Does not include pending games.
+    uint32_t gameCount() const;
+
     //! Decay function. Needs to be called after each rating period. Either resets
     //! the number of games played or increases deviation.
     void decay(bool wasActive, double factor, double maxDeviationAfterActive);
@@ -149,12 +152,12 @@ public:
     double _pendingVolatility;
 
     //! Total number of games played.
-    uint32_t _games = 0;
-
-    //! Number of pending games.
-    uint32_t _pendingGames = 0;
+    uint32_t _totalGames = 0;
 
     //! How do we actually calculate the rating of this player?
     CalculationType _calculationType = CalculationType::Initial;
+
+    //! The number of pending games.
+    uint32_t _pendingGames = 0;
 
 }; // class Rating

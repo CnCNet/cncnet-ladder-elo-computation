@@ -145,7 +145,7 @@ public:
     void apply(std::chrono::year_month_day date, bool decay, gamemodes::GameMode gameMode);
 
     //! Update a players rating.
-    Rating::CalculationType update();
+    void update();
 
     //! Check how many days can pass until this players becomes inactive.
     //! Returns 0 if the player is already inactive.
@@ -197,6 +197,9 @@ public:
 
     //! Get the number of games played with the given faction.
     uint32_t gameCount(factions::Faction faction) const;
+
+    //! Get the number of games played until yesterday.
+    uint32_t yesterdaysGameCount() const;
 
     //! Get the most often used player name in quick match.
     std::string mostOftenUsedPlayerName() const;

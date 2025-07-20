@@ -16,7 +16,10 @@ Options::Options(int argc, char* argv[])
         ("h,help", "Show help.")
         ("d,dry-run", "Run without writing any results (test mode).")
         ("s,statistics", "Export additional player and map statistics.")
-        ("a,all-games", "Include todays games.")
+        ("e,end", "Set the end date (format: YYYY-MM-DD). Only games before this date are considered.",
+         cxxopts::value<std::string>())
+        ("i,timeshift", "Add a time shift for all games to fix time zone issues.",
+         cxxopts::value<int>()->default_value("0"))
         ("l,log-level", "Set the log level (debug, verbose, info, warning, error, critical, fatal).",
          cxxopts::value<std::string>()->default_value("verbose"))
         ("m,gamemode", "Set the game mode. Every available ladder abbreviation is valid.",
@@ -119,8 +122,35 @@ Options::Options(int argc, char* argv[])
     }
 
     dryRun = result["dry-run"].as<bool>();
-    allGames = result["all-games"].as<bool>();
     exportFullStats = result["statistics"].as<bool>();
+
+    if (result.count("timeshift") > 0)
+    {
+        timeShiftInHours = result["timeshift"].as<int>();
+    }
+
+    if (result.count("end"))
+    {
+        std::string input = result["end"].as<std::string>();
+        std::tm tm = {};
+        std::istringstream ss(input);
+        ss >> std::get_time(&tm, "%Y-%m-%d");
+
+        if (ss.fail())
+        {
+            std::cerr << "Invalid date format. Use YYYY-MM-DD." << std::endl;
+            setQuitWithErrorCode(1);
+            return;
+        }
+
+        tm.tm_sec = 0;
+        endDate = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+    }
+    else
+    {
+        // Default end date is today.
+        endDate = std::chrono::system_clock::now();
+    }
 
     if (mySqlUser().empty())
     {

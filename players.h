@@ -27,6 +27,9 @@ public:
     //! Does this player name already exist?
     bool exists(const std::string &playerName);
 
+    //! Do we have pending games?
+    bool hasPendingGames() const;
+
     //! Get the index of a player based on the quick match name.
     //! Returns 0 if no player is found.
     uint32_t userId(const std::string &nick, const std::string &ladderName) const;

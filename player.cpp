@@ -162,6 +162,13 @@ double Player::yesterdaysElo(factions::Faction faction) const
 
 /*!
  */
+uint32_t Player::yesterdaysGameCount() const
+{
+    return _yesterdaysRatings[factions::Combined].gameCount();
+}
+
+/*!
+ */
 bool Player::isActive(factions::Faction faction) const
 {
     // Because entries are alternatining dates when players goes active/inactive,
@@ -316,25 +323,11 @@ double Player::volatility(factions::Faction faction) const
 
 /*!
  */
-Rating::CalculationType Player::update()
+void Player::update()
 {
-    uint32_t gameCount = 0;
-    double opponentElo = 0.0;
-    double result = 0.0;
-    Rating::CalculationType calculationType = Rating::CalculationType::None;
-
     for (int i = 0; i < factions::count(); i++)
     {
-        // Let's create some stats.
-        if (i != factions::Combined)
-        {
-            for (size_t j = 0; j < _pendingGames[i].size(); j++)
-            {
-                gameCount++;
-                opponentElo += glicko::scaleFactor * std::get<glicko::Rating>(_pendingGames[i][j]) + glicko::initialRating;
-                result += _pendingResults[i][j];
-            }
-        }
+        _updated[i] = !_pendingGames[i].empty();
 
         if (!_pendingGames[i].empty())
         {
@@ -356,25 +349,22 @@ Rating::CalculationType Player::update()
                 Log::info() << "Player " << this->alias() << " and faction " << factions::name(factions::toFaction(i)) << " still use single step calculation.";
             }
 
-            calculationType = _ratings[i].update(_pendingGames[i], _pendingResults[i]);
+            Rating::CalculationType appliedCalculationType = _ratings[i].update(_pendingGames[i], _pendingResults[i]);
 
             if (currentCalculationType == Rating::CalculationType::Initial || currentCalculationType == Rating::CalculationType::SingleStep)
             {
                 Log::info() << "Applied improved initial ELO calculation to player " << this->alias() << ".";
             }
 
-            if (currentCalculationType != Rating::CalculationType::Normal && _ratings[i].currentCalculationType() == Rating::CalculationType::Normal)
+            if (appliedCalculationType != Rating::CalculationType::Normal && _ratings[i].currentCalculationType() == Rating::CalculationType::Normal)
             {
                 Log::info() << "Initial rating for player " << this->alias() << " and faction " << factions::name(factions::toFaction(i)) << " is [" << _ratings[i].pendingElo() << ", " << _ratings[i].deviation() << "].";
             }
-            _updated[i] = true;
         }
 
         _pendingGames[i].clear();
         _pendingResults[i].clear();
     }
-
-    return calculationType;
 }
 
 /*!

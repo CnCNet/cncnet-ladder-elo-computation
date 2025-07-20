@@ -359,7 +359,7 @@ void MapStats::finalize(const std::filesystem::path &directory, const Players &p
             probToday.games != probToday.wins &&
             (players[player1].elo(factions::Combined) > 1300 || players[player2].elo(factions::Combined) > 1300))
         {
-            Log::info() << players[player1].alias() << " + " << players[player2].alias() << " " << probToday.games << "/" << probToday.wins << " " << probToday.actual << "/" << probToday.expected;
+            Log::verbose() << players[player1].alias() << " + " << players[player2].alias() << " " << probToday.games << "/" << probToday.wins << " " << probToday.actual << "/" << probToday.expected;
             _teams.insert({key, probToday.games, probToday.wins, players[player1].elo(factions::Combined) + players[player2].elo(factions::Combined), eloDiff(probToday), probToday.lastGame });
         }
 
@@ -367,7 +367,7 @@ void MapStats::finalize(const std::filesystem::path &directory, const Players &p
             probYesterday.games != probYesterday.wins &&
             (players[player1].elo(factions::Combined) > 1300 || players[player2].elo(factions::Combined) > 1300))
         {
-            Log::info() << players[player1].alias() << " + " << players[player2].alias() << " " << probYesterday.games << "/" << probYesterday.wins << " " << probYesterday.actual << "/" << probYesterday.expected;
+            Log::verbose() << players[player1].alias() << " + " << players[player2].alias() << " " << probYesterday.games << "/" << probYesterday.wins << " " << probYesterday.actual << "/" << probYesterday.expected;
             _yesterdaysTeams.insert({key, probYesterday.games, probYesterday.wins, players[player1].elo(factions::Combined) + players[player2].elo(factions::Combined), eloDiff(probYesterday), probYesterday.lastGame });
         }
     }

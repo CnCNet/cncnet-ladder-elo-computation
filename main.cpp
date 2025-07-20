@@ -269,11 +269,9 @@ int main(int argc, char* argv[])
     // Run 3 (compule elo):
 
     MapStats stats(options.gameMode);
-    uint64_t timestamp = games.begin()->second.timestamp();
-    std::chrono::milliseconds ms_since_epoch = std::chrono::milliseconds(timestamp * 1000) - std::chrono::hours(24); // TODO: Why subtract 1 day?
-    std::chrono::system_clock::time_point time_point = std::chrono::system_clock::time_point(ms_since_epoch);
-    std::chrono::time_point<std::chrono::system_clock, std::chrono::days> currentDate = floor<std::chrono::days>(time_point);
-    std::chrono::time_point<std::chrono::system_clock, std::chrono::days> lastDate;
+    std::chrono::time_point<std::chrono::system_clock, std::chrono::days> previousGameDate{};
+    std::chrono::time_point<std::chrono::system_clock, std::chrono::days> uninitializedDate{};
+    Game *lastProcessedGame = nullptr;
 
     for (Game *game : validGames)
     {
@@ -281,17 +279,16 @@ int main(int argc, char* argv[])
 
         std::chrono::milliseconds timestamp = std::chrono::milliseconds(static_cast<uint64_t>(game->timestamp() + game->duration()) * 1000);
         std::chrono::system_clock::time_point currentTimePoint = std::chrono::system_clock::time_point(timestamp);
+        std::chrono::system_clock::time_point shiftedTime = currentTimePoint + std::chrono::hours(options.timeShiftInHours);
+        std::chrono::time_point<std::chrono::system_clock, std::chrono::days> gameDate = floor<std::chrono::days>(shiftedTime);
 
-        // Days will be switches at UTC+9. So AKST is the time zone for flipping days. The game time will still stay
-        // UTC, but for historical ELO, peak rating, etc... the ELO is taken at this specific time. For the locally
-        // generated ELO list it was supposed to be UTC+1, but was UTC-1 by accident.
-        std::chrono::system_clock::time_point shiftedTime = currentTimePoint - std::chrono::hours(9);
-        std::chrono::time_point<std::chrono::system_clock, std::chrono::days> date = floor<std::chrono::days>(shiftedTime);
-
-        Log::verbose() << "Shifted time of game " << game->id() << " from "
+        Log::debug() << "Shifted time of game " << game->id() << " from "
                        << stringtools::fromDateTime(currentTimePoint) << " to " << stringtools::fromDateTime(shiftedTime) << ".";
 
-        lastDate = date;
+        if (gameDate > options.endDate)
+        {
+            break;
+        }
 
         for (uint32_t j = 0; j < game->playerCount(); j++)
         {
@@ -302,16 +299,18 @@ int main(int argc, char* argv[])
 
         Log::verbose() << "Processing game " << *game << " (Run 3).";
 
-        // Date switch. Update players ELO values.
-        if (date != currentDate && !validGames.empty())
+        // Date switch. Update players ELO values. If there are no valid games, no update is made and deviation won't
+        // increase. It is more likely that technical reason prevented playing rather than no player showed up for
+        // an entire day.
+        if (previousGameDate != uninitializedDate && gameDate != previousGameDate)
         {
-            Log::info() << "Apply update for " << stringtools::fromDate(date);
+            Log::info() << "Apply update for " << stringtools::fromDate(previousGameDate);
             players.update();
             // In contrast to the local ELO list, the result are for the current day, which means that
             // your peak rating is set to the day where you achieved it and not they day after, when it's visible
             // for the first time.
-            players.apply(currentDate, true, options.gameMode);
-            currentDate = date;
+            players.apply(previousGameDate, true, options.gameMode);
+            previousGameDate = gameDate;
         }
 
         for (uint32_t j = 0; j < game->playerCount(); j++)
@@ -321,20 +320,22 @@ int main(int argc, char* argv[])
 
         // Update map stats.
         stats.processGame(*game, players);
+        lastProcessedGame = game;
+        previousGameDate = gameDate;
 
     } // for (Game *game : validGames)
 
     // Process the last day.
-    if (options.allGames)
+    if (players.hasPendingGames())
     {
+        Log::info() << "Apply update for " << stringtools::fromDate(previousGameDate);
         players.update();
-        players.apply(lastDate, true, options.gameMode);
-        currentDate = lastDate;
+        players.apply(previousGameDate, true, options.gameMode);
     }
 
     players.finalize();
 
-    Log::info() << "Last day taken into account: " << currentDate;
+    Log::info(lastProcessedGame != nullptr) << "Last game processed: " << *lastProcessedGame;
 
     if (!options.dryRun)
     {
