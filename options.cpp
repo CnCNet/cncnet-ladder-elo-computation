@@ -124,16 +124,13 @@ Options::Options(int argc, char* argv[])
     dryRun = result["dry-run"].as<bool>();
     exportFullStats = result["statistics"].as<bool>();
 
-    if (result.count("timeshift") > 0)
-    {
-        timeShiftInHours = result["timeshift"].as<int>();
-    }
+    timeShiftInHours = result["timeshift"].as<int>();
 
     if (result.count("end"))
     {
         std::string input = result["end"].as<std::string>();
-        std::tm tm = {};
         std::istringstream ss(input);
+        std::tm tm = {};
         ss >> std::get_time(&tm, "%Y-%m-%d");
 
         if (ss.fail())
@@ -143,13 +140,18 @@ Options::Options(int argc, char* argv[])
             return;
         }
 
-        tm.tm_sec = 0;
-        endDate = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+        std::chrono::year_month_day ymd{
+            std::chrono::year{tm.tm_year + 1900},
+            std::chrono::month{tm.tm_mon + 1U},
+            std::chrono::day{tm.tm_mday}
+        };
+
+        endDate = std::chrono::sys_days{ymd};
     }
     else
     {
         // Default end date is today.
-        endDate = std::chrono::system_clock::now();
+        endDate = std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
     }
 
     if (mySqlUser().empty())

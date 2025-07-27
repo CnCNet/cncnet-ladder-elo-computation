@@ -48,6 +48,8 @@ int main(int argc, char* argv[])
 
     Log::info();
     Log::addTimestampAndLogLevel(true);
+    Log::info() << "Running elogen V" << PROJECT_VERSION << ".";
+    Log::info() << "End date is " << options.endDate << ".";
     Log::info() << "Starting ELO computation.";
     Log::info() << "Initiating duplicates.";
     connection.initDuplicates();

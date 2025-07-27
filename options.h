@@ -32,7 +32,7 @@ public:
     std::string ladderAbbreviation;
     std::filesystem::path outputDirectory;
     std::filesystem::path tournamentFile;
-    std::chrono::system_clock::time_point endDate;
+    std::chrono::time_point<std::chrono::system_clock, std::chrono::days> endDate;
     int timeShiftInHours;
     bool dryRun;
     bool exportFullStats;
