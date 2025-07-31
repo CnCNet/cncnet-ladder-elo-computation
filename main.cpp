@@ -287,7 +287,7 @@ int main(int argc, char* argv[])
         Log::debug() << "Shifted time of game " << game->id() << " from "
                        << stringtools::fromDateTime(currentTimePoint) << " to " << stringtools::fromDateTime(shiftedTime) << ".";
 
-        if (gameDate > options.endDate)
+        if (gameDate >= options.endDate)
         {
             break;
         }
