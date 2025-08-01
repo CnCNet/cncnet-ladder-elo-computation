@@ -42,6 +42,21 @@ bool Players::exists(const std::string &playerName)
 
 /*!
  */
+std::vector<uint32_t> Players::userIds() const
+{
+    std::vector<uint32_t> userIds;
+    userIds.reserve(_players.size());
+
+    for (const auto& [userId, player] : _players)
+    {
+        userIds.push_back(userId);
+    }
+
+    return userIds;
+}
+
+/*!
+ */
 Player& Players::operator[](uint32_t index)
 {
     if (index == 0)
@@ -208,10 +223,11 @@ uint32_t Players::activePlayerCount() const
 
 /*!
  */
-void Players::exportActivePlayers(const std::filesystem::path &directory, gamemodes::GameMode gameMode) const
+std::map<uint32_t, uint32_t> Players::exportActivePlayers(const std::filesystem::path &directory, gamemodes::GameMode gameMode) const
 {
     Log::info() << "Exporting list of active players.";
 
+    std::map<uint32_t, uint32_t> rankByUserId;
     using json = nlohmann::json;
     json data = json::object();
 
@@ -353,6 +369,7 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
         }
 
         players.push_back(jsonPlayer);
+        rankByUserId[player->userId()] = i + 1;
     }
 
     data["data"] = players;
@@ -360,17 +377,20 @@ void Players::exportActivePlayers(const std::filesystem::path &directory, gamemo
     std::ofstream stream(directory / (gamemodes::shortName(gameMode) + "_active_players.json"));
     stream << std::setw(4) << data << std::endl;
     stream.close();
+
+    return rankByUserId;
 }
 
 /*!
  */
-void Players::exportBestOfAllTime(
+std::map<uint32_t, uint32_t> Players::exportBestOfAllTime(
     const std::filesystem::path &directory,
     gamemodes::GameMode gameMode) const
 {
     Log::info() << "Exporting best players of all time.";
 
     std::vector<const Player*> filteredAndSortedPlayers;
+    std::map<uint32_t, uint32_t> rankByUserId;
 
     for (auto it = _players.cbegin(); it != _players.cend(); ++it)
     {
@@ -434,12 +454,15 @@ void Players::exportBestOfAllTime(
         jsonPlayer["status"] = player->isActive() ? "ACTIVE" : "INACTIVE";
 
         players.push_back(jsonPlayer);
+        rankByUserId[player->userId()] = i + 1;
     }
     data["data"] = players;
 
     std::ofstream stream(directory / (gamemodes::shortName(gameMode) + "_bestofalltime.json"));
     stream << std::setw(4) << data << std::endl;
     stream.close();
+
+    return rankByUserId;
 }
 
 /*!

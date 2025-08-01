@@ -339,14 +339,14 @@ int main(int argc, char* argv[])
 
     Log::info(lastProcessedGame != nullptr) << "Last game processed: " << *lastProcessedGame;
 
-    if (!options.dryRun)
-    {
-        players.exportActivePlayers(options.outputDirectory, options.gameMode);
-        players.exportBestOfAllTime(options.outputDirectory, options.gameMode);
-        players.exportMostDaysActive(options.outputDirectory, options.gameMode);
-        players.exportAlphabeticalOrder(options.outputDirectory, options.gameMode);
-        players.exportNewPlayers(options.outputDirectory, options.gameMode);
-    }
+    if (options.dryRun)
+        return 0;
+
+    std::map<uint32_t, uint32_t> activeRanks = players.exportActivePlayers(options.outputDirectory, options.gameMode);
+    std::map<uint32_t, uint32_t> allTimeRanks = players.exportBestOfAllTime(options.outputDirectory, options.gameMode);
+    players.exportMostDaysActive(options.outputDirectory, options.gameMode);
+    players.exportAlphabeticalOrder(options.outputDirectory, options.gameMode);
+    players.exportNewPlayers(options.outputDirectory, options.gameMode);
 
     for (auto it = ignoredMaps.begin(); it != ignoredMaps.end(); ++it)
     {
@@ -374,6 +374,12 @@ int main(int argc, char* argv[])
         stats.exportMapsPlayed(options.outputDirectory);
         players.exportPlayerDetails(options.outputDirectory, {}, games, options.ladderAbbreviation);
     }
+    Log::info() << "Exported map stats.";
 
+    // Player ratings.
+    Log::info() << "Updating table `user_ratings`.";
+    connection.writePlayerRatings(options.gameMode, players, activeRanks, allTimeRanks);
+
+    Log::info() << "All done.";
     return 0;
 }

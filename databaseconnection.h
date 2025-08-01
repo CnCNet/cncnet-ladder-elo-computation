@@ -72,6 +72,9 @@ public:
     //! one of the invalid user ids.
     uint32_t getBaseAccount(const std::set<uint32_t>& userIds, const std::set<uint32_t> &invalidUserIds);
 
+    //! Write data to table user_ratings;
+    void writePlayerRatings(gamemodes::GameMode gameMode, const Players &players, std::map<uint32_t, uint32_t> activeRanks, std::map<uint32_t, uint32_t> allTimeRanks);
+
 private:
     //! Is the connection ready?
     bool _ready;

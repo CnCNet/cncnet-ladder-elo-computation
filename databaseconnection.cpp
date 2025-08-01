@@ -842,3 +842,107 @@ uint32_t DatabaseConnection::getBaseAccount(const std::set<uint32_t>& userIds, c
     Log::fatal() << "No base account found among user ids " << userIds << ".";
     throw std::runtime_error("No base account. Cannot continue;");
 }
+
+/*!
+ */
+void DatabaseConnection::writePlayerRatings(
+    gamemodes::GameMode gameMode,
+    const Players &players,
+    std::map<uint32_t, uint32_t> activeRanks,
+    std::map<uint32_t, uint32_t> allTimeRanks)
+{
+    try
+    {
+        // Check if expected columns exist.
+        std::set<std::string> requiredColumns = {
+            "user_id", "ladder_id", "rating", "elo_rank",
+            "alltime_rank", "rated_games", "active", "created_at", "updated_at"
+        };
+
+        std::unique_ptr<sql::PreparedStatement> checkStmt(
+            _connection->prepareStatement(R"SQL(
+                SELECT COLUMN_NAME
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE() AND table_name = 'user_ratings'
+            )SQL")
+        );
+
+        std::unique_ptr<sql::ResultSet> columnResult(checkStmt->executeQuery());
+        std::set<std::string> actualColumns;
+
+        while (columnResult->next())
+        {
+            actualColumns.insert(columnResult->getString("COLUMN_NAME"));
+        }
+
+        for (const std::string &col : requiredColumns)
+        {
+            if (!actualColumns.contains(col))
+            {
+                Log::warning() << "Unable to write player ratings due to missing column '" << col << "' in 'user_ratings'.";
+                return;
+            }
+        }
+
+        // Clear table.
+        std::unique_ptr<sql::PreparedStatement> truncateStmt(
+            _connection->prepareStatement("TRUNCATE TABLE user_ratings")
+        );
+        truncateStmt->execute();
+        Log::info() << "Table 'user_ratings' truncated.";
+
+        // Get ladder id.
+        uint32_t ladderId = 0;
+        std::unique_ptr<sql::PreparedStatement> ladderStmt(
+            _connection->prepareStatement("SELECT id FROM ladders WHERE abbreviation = ? LIMIT 1")
+        );
+        ladderStmt->setString(1, _ladder);
+        std::unique_ptr<sql::ResultSet> ladderResult(ladderStmt->executeQuery());
+
+        if (ladderResult->next())
+        {
+             ladderId = ladderResult->getUInt("id");
+        }
+        else
+        {
+            Log::fatal() << "Ladder '" << _ladder << "' not found in table 'ladders'.";
+            return;
+        }
+
+        // Prepare statement to save user data.
+        std::unique_ptr<sql::PreparedStatement> insertStmt(
+            _connection->prepareStatement(R"SQL(
+                INSERT INTO user_ratings
+                (user_id, ladder_id, rating, elo_rank, alltime_rank, rated_games, active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+            )SQL")
+        );
+
+        for (uint32_t userId : players.userIds())
+        {
+            const Player &player = players[userId];
+            uint32_t gameCount = player.gameCount();
+            double elo = (gameMode == gamemodes::Blitz2v2) ? player.elo(factions::Combined) : player.maxRating(!player.isActive());
+            if (elo < 0.0)
+            {
+                // Try to get any rating, even if the player was never active.
+                elo = player.elo(factions::Combined);
+            }
+            insertStmt->setUInt(1, userId);
+            insertStmt->setUInt(2, ladderId);
+            insertStmt->setInt(3, static_cast<int>(std::round(elo)));
+            insertStmt->setUInt(4, activeRanks.contains(userId) ? activeRanks[userId] : 0);
+            insertStmt->setUInt(5, allTimeRanks.contains(userId) ? allTimeRanks[userId] : 0);
+            insertStmt->setUInt(6, gameCount);
+            insertStmt->setBoolean(7, player.isActive());
+
+            insertStmt->execute();
+        }
+
+        Log::info() << "Player ratings written to 'user_ratings'.";
+    }
+    catch (sql::SQLException &e)
+    {
+        Log::fatal() << "Error while writing user ratings: " << e.what();
+    }
+}

@@ -34,6 +34,9 @@ public:
     //! Returns 0 if no player is found.
     uint32_t userId(const std::string &nick, const std::string &ladderName) const;
 
+    //! Get all user ids.
+    std::vector<uint32_t> userIds() const;
+
     //! Get the index of a player based on his alias.
     //! Returns 0 if no player is found.
     uint32_t userIdFromAlias(const std::string &alias) const;
@@ -68,10 +71,11 @@ public:
     // Exporting methods for actual rankings.
 public:
     //! Export list of active players, sorted by rating. The is the actual ELO list.
-    void exportActivePlayers(const std::filesystem::path &directory, gamemodes::GameMode gameMode) const;
+    //! Returns rank for each user id.
+    std::map<uint32_t, uint32_t> exportActivePlayers(const std::filesystem::path &directory, gamemodes::GameMode gameMode) const;
 
-    //! Make list of best players of all time.
-    void exportBestOfAllTime(const std::filesystem::path &directory, gamemodes::GameMode gameMode) const;
+    //! Make list of best players of all time. Returns rank for each user id.
+    std::map<uint32_t, uint32_t> exportBestOfAllTime(const std::filesystem::path &directory, gamemodes::GameMode gameMode) const;
 
     //! Most active players aka most loyal players.
     void exportMostDaysActive(const std::filesystem::path &directory, gamemodes::GameMode gameMode) const;
