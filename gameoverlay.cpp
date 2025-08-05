@@ -98,7 +98,7 @@ void GameOverlay::loadTournamentGames(
                 {
                     // Need to create a player with a fake id.
                     userId1 = currentFakeUserId++;
-                    Player player(userId1, "?", gameMode);
+                    Player player(userId1, 0, "?", gameMode);
                     Log::info() << "Manually created player " << userId1 << " with alias " << playerAlias1 << ".";
                     player.setAlias(playerAlias1);
                     players.add(player, ladderAbbreviation);
@@ -115,7 +115,7 @@ void GameOverlay::loadTournamentGames(
                 {
                     // Need to create a player with a fake id.
                     userId2 = currentFakeUserId++;
-                    Player player(userId2, "?", gameMode);
+                    Player player(userId2, 0, "?", gameMode);
                     player.setAlias(playerAlias2);
                     Log::info() << "Manually created player " << userId2 << " with alias " << playerAlias2 << ".";
                     players.add(player, ladderAbbreviation);

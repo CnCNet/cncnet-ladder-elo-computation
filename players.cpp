@@ -16,7 +16,9 @@
  */
 Players::Players()
 {
-    // Nothing to do.
+    // TODO: Mark test accounts in the database.
+    // Games with test account don't count for ELO.
+    _testAccounts.insert({59825, 69266, 75413, 75411, 75636, 11533, 12934, 59854, 60320, 60348, 60366, 63387, 69268, 76947 });
 }
 
 /*!
@@ -113,11 +115,6 @@ void Players::add(const Player &player, const std::string &ladderAbbreviation)
  */
 void Players::markDuplicates(uint32_t id, const std::set<uint32_t> &duplicates)
 {
-    for (uint32_t duplicate : duplicates)
-    {
-        _duplicates[duplicate] = id;
-    }
-
     for (auto it = _nickToUserId.begin(); it != _nickToUserId.end(); ++it)
     {
         std::map<std::string, uint32_t> &innerMap = it->second;
@@ -129,13 +126,6 @@ void Players::markDuplicates(uint32_t id, const std::set<uint32_t> &duplicates)
                 innerIt->second = id;
             }
         }
-    }
-
-    if (id == 1)
-    {
-        // All duplicates of user 1 are test accounts. These games won't count
-        // when computing ELO.
-        _testAccounts.insert(duplicates.begin(), duplicates.end());
     }
 }
 
@@ -607,6 +597,79 @@ void Players::exportAlphabeticalOrder(
     data["data"] = players;
 
     std::ofstream stream(directory / (gamemodes::shortName(gameMode) + "_players_all_alphabetical.json"));
+    stream << std::setw(4) << data << std::endl;
+    stream.close();
+}
+
+/*!
+ */
+void Players::exportAllPlayers(
+    const std::filesystem::path &directory,
+    gamemodes::GameMode gameMode) const
+{
+    Log::info() << "Export all players in the order of their ids.";
+
+    using json = nlohmann::json;
+    json data = json::object();
+
+    data["description"] = "All players, who are or were active, in alphabetical order";
+    data["columns"] = json::array({
+        { { "index", 0 }, { "header", "Name" } , { "name", "name" } },
+        { { "index", 1 }, { "header", "Status" } , { "name", "status" } },
+        { { "index", 2 }, { "header", "Last game" } , { "name", "date" } },
+        { { "index", 3 }, { "header", "Games" } , { "name", "mix_games" }, { "info", "Total number of games played." } },
+        { { "index", 4 }, { "header", "Elo" } , { "name", "sov_elo" } },
+        { { "index", 5 }, { "header", "Games" } , { "name", "sov_games" } },
+        { { "index", 6 }, { "header", "Elo" } , { "name", "all_elo" } },
+        { { "index", 7 }, { "header", "Games" } , { "name", "all_games" } },
+        { { "index", 8 }, { "header", "Elo" } , { "name", "mix_elo" } }
+    });
+
+    std::vector<const Player*> filteredAndSortedPlayers;
+
+    auto sorter =  [] (const Player *a, const Player *b) { return a->userId() < b->userId(); };
+
+    for (auto it = _players.cbegin(); it != _players.cend(); ++it)
+    {
+        filteredAndSortedPlayers.push_back(&(it->second));
+    }
+
+    // Now sort the players.
+    std::sort(filteredAndSortedPlayers.begin(), filteredAndSortedPlayers.end(), sorter);
+
+    json players = json::array();
+
+    for (int i = 0; i < filteredAndSortedPlayers.size(); i++)
+    {
+        json jsonPlayer = json::object();
+
+        const Player *player = filteredAndSortedPlayers[i];
+
+        jsonPlayer["name"] = player->alias();
+        jsonPlayer["id"] = "#" + std::to_string(player->userId());
+        jsonPlayer["status"] = player->isActive() ? "ACTIVE" : "INACTIVE";
+        jsonPlayer["date"] = stringtools::fromDate(player->lastGame());
+
+        for (int j = 0; j < factions::count(); j++)
+        {
+            factions::Faction faction = factions::toFaction(j);
+
+            if (player->gameCount(faction) > 0)
+            {
+                jsonPlayer[factions::shortName(faction) + "_elo"] = std::to_string(static_cast<int>(player->elo(faction)));
+                std::ostringstream oss;
+                oss << std::fixed << std::setprecision(1) << player->deviation(faction);
+                jsonPlayer["deviation"] = oss.str();
+                jsonPlayer[factions::shortName(faction) + "_games"] = player->gameCount(faction);
+            }
+        }
+
+        players.push_back(jsonPlayer);
+    }
+
+    data["data"] = players;
+
+    std::ofstream stream(directory / (gamemodes::shortName(gameMode) + "_all_players.json"));
     stream << std::setw(4) << data << std::endl;
     stream.close();
 }

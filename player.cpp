@@ -24,8 +24,9 @@ Player::Player() :
 
 /*!
  */
-Player::Player(uint32_t userId, const std::string &username, gamemodes::GameMode gameMode) :
+Player::Player(uint32_t userId, uint32_t primaryUserId, const std::string &username, gamemodes::GameMode gameMode) :
     _userId(userId),
+    _primaryUserId(primaryUserId),
     _account(username)
 {
 
@@ -62,13 +63,20 @@ Player::~Player()
  */
 uint32_t Player::userId() const
 {
-    if (_userId == 0xFFFFFFFF)
+    if (_userId == 0)
     {
         // Default constructor was called (probably by some container) but left
         // uninitialized.
         throw std::runtime_error("Asking for the user id of an uninitialized user.");
     }
     return _userId;
+}
+
+/*!
+ */
+uint32_t Player::primaryUserId() const
+{
+    return _primaryUserId;
 }
 
 /*!

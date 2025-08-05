@@ -37,6 +37,8 @@ public:
     bool dryRun;
     bool exportFullStats;
     bool allGames;
+    bool cncnetDuplicates;
+    bool noDuplicates;
 
 private:
     std::string host;

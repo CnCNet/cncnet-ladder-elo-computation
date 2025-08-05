@@ -70,7 +70,7 @@ class Player
 {
 public:
     //! Constructor.
-    Player(uint32_t userId, const std::string &username, gamemodes::GameMode gameMode = gamemodes::Unknown);
+    Player(uint32_t userId, uint32_t primaryUserId, const std::string &username, gamemodes::GameMode gameMode = gamemodes::Unknown);
 
     //! Constructor for illegal player.
     Player();
@@ -81,6 +81,9 @@ public:
 public:
     //! Get the user id.
     uint32_t userId() const;
+
+    //! Get the primary user id.
+    uint32_t primaryUserId() const;
 
     //! The the players account name.
     void setAccount(const std::string &account);
@@ -243,6 +246,9 @@ public:
 private:
     //! User id. 0 if invalid player.
     uint32_t _userId = 0;
+
+    //! Primary user id. Points to the primary account if this is a duplicate.
+    uint32_t _primaryUserId = 0;
 
     //! Number of wins.
     uint32_t _wins;

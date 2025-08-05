@@ -341,7 +341,7 @@ uint32_t DatabaseConnection::loadPlayerFromAlias(const std::string &alias, Playe
     // Nicks for all ladders. Not used. Processing one ladder at once.
     std::unique_ptr<sql::PreparedStatement> statement(
         _connection->prepareStatement(
-            "SELECT players.user_id, users.alias, players.username, users.name, ladders.abbreviation "
+            "SELECT players.user_id, users.primary_user_id, users.alias, players.username, users.name, ladders.abbreviation "
             "FROM players "
             "JOIN ladders ON players.ladder_id = ladders.id "
             "JOIN users ON users.id = players.user_id "
@@ -362,7 +362,8 @@ uint32_t DatabaseConnection::loadPlayerFromAlias(const std::string &alias, Playe
         if (userId == 0)
         {
             userId = result->getInt("user_id");
-            player = Player(userId, result->getString("name"), _gameMode);
+            uint32_t primaryUserId = result->getInt("primary_user_id");
+            player = Player(userId, primaryUserId, result->getString("name"), _gameMode);
             player->setAlias(alias);
         }
 
@@ -411,7 +412,7 @@ uint32_t DatabaseConnection::loadPlayer(
 
     std::unique_ptr<sql::PreparedStatement> statement(
         _connection->prepareStatement(
-            "SELECT players.user_id, players.username, ladders.abbreviation, users.alias, users.name "
+            "SELECT players.user_id, players.username, ladders.abbreviation, users.alias, users.name, users.primary_user_id "
             "FROM players "
             "JOIN ladders ON players.ladder_id = ladders.id "
             "JOIN users ON players.user_id = users.id "
@@ -445,7 +446,8 @@ uint32_t DatabaseConnection::loadPlayer(
         if (userId == 0)
         {
             userId = result->getInt("user_id");
-            player = Player(userId, result->getString("name"), _gameMode);
+            uint32_t primaryUserId = result->getInt("primary_user_id");
+            player = Player(userId, primaryUserId, result->getString("name"), _gameMode);
         }
         else if (userId != result->getInt("user_id") || player->account() != result->getString("name"))
         {
@@ -483,9 +485,10 @@ bool DatabaseConnection::loadPlayerWithNoUser(
 {
     std::unique_ptr<sql::PreparedStatement> stmt(
         _connection->prepareStatement(
-            "SELECT players.user_id, players.username, ladders.abbreviation "
+            "SELECT players.user_id, players.username, ladders.abbreviation, users.primary_user_id "
             "FROM players "
             "JOIN ladders ON players.ladder_id = ladders.id "
+            "JOIN users ON players.user_id = users.id "
             "WHERE players.user_id = ? "
             // "AND ladders.abbreviation = ? " <= User might not have played the current ladder.
             "ORDER BY players.username;"
@@ -503,7 +506,8 @@ bool DatabaseConnection::loadPlayerWithNoUser(
     {
         if (!player.has_value())
         {
-            player = Player(userId, "", _gameMode);
+            uint32_t primaryUserId = result->getInt("primary_user_id");
+            player = Player(userId, primaryUserId, "", _gameMode);
         }
 
         player->addName(result->getString("username"), result->getString("abbreviation"));
@@ -526,7 +530,7 @@ bool DatabaseConnection::loadPlayer(
 {
     std::unique_ptr<sql::PreparedStatement> stmt(
         _connection->prepareStatement(
-            "SELECT players.user_id, players.username, ladders.abbreviation, users.alias, users.name "
+            "SELECT players.user_id, players.username, ladders.abbreviation, users.alias, users.name, users.primary_user_id "
             "FROM players "
             "JOIN ladders ON players.ladder_id = ladders.id "
             "JOIN users ON players.user_id = users.id "
@@ -548,7 +552,8 @@ bool DatabaseConnection::loadPlayer(
         if (!player.has_value())
         {
             std::string accountName = result->getString("name");
-            player = Player(userId, accountName, _gameMode);
+            uint32_t primaryUserId = result->getInt("primary_user_id");
+            player = Player(userId, primaryUserId, accountName, _gameMode);
 
             std::string alias = result->getString("alias");
             if (!alias.empty())
