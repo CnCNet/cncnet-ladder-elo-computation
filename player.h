@@ -173,9 +173,9 @@ public:
     bool wasActiveBefore(const std::chrono::year_month_day &date, factions::Faction faction) const;
 
     //! The players best active faction.
-    factions::Faction getBestActiveFaction() const;
+    factions::Faction getBestFaction(bool includeInactive = false) const;
 
-    //! Get the maximum rating for this players. Return the rating of
+    //! Get the maximum rating for this players. Returns the rating of
     //! the highest active rating.
     double maxRating(bool includeInactive = false) const;
 

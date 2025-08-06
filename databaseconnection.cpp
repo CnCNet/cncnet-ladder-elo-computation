@@ -485,7 +485,7 @@ bool DatabaseConnection::loadPlayerWithNoUser(
 {
     std::unique_ptr<sql::PreparedStatement> stmt(
         _connection->prepareStatement(
-            "SELECT players.user_id, players.username, ladders.abbreviation, users.primary_user_id "
+            "SELECT players.user_id, players.username, ladders.abbreviation, users.alias, users.primary_user_id "
             "FROM players "
             "JOIN ladders ON players.ladder_id = ladders.id "
             "JOIN users ON players.user_id = users.id "
@@ -508,6 +508,12 @@ bool DatabaseConnection::loadPlayerWithNoUser(
         {
             uint32_t primaryUserId = result->getInt("primary_user_id");
             player = Player(userId, primaryUserId, "", _gameMode);
+
+            std::string alias = result->getString("alias");
+            if (!alias.empty())
+            {
+                player->setAlias(alias);
+            }
         }
 
         player->addName(result->getString("username"), result->getString("abbreviation"));
@@ -586,6 +592,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
         SELECT
             games.id AS gameId,
             players.username AS playerUsername,
+            players.user_id AS playerUserId,
             ladders.abbreviation AS ladderAbbreviation,
             player_game_reports.won AS playerWon,
             player_game_reports.points,
@@ -616,6 +623,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
         SELECT
             games.id AS gameId,
             players.username AS playerUsername,
+            players.user_id AS playerUserId,
             ladders.abbreviation AS ladderAbbreviation,
             player_game_reports.won AS playerWon,
             player_game_reports.points,
@@ -648,6 +656,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
             "SELECT "
             "  games.id AS gameId, "
             "  players.username AS playerUsername, "
+            "  players.user_id AS playerUserId, "
             "  ladders.abbreviation AS ladderAbbreviation, "
             "  player_game_reports.won AS playerWon, "
             "  player_game_reports.points, "
@@ -687,6 +696,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
         "SELECT "
         "  games.id AS gameId, "
         "  players.username AS playerUsername, "
+        "  players.user_id AS playerUserId, "
         "  ladders.abbreviation AS ladderAbbreviation, "
         "  player_game_reports.won AS playerWon, "
         "  player_game_reports.points, "
@@ -771,6 +781,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
         std::string playerName = result->getString("playerUsername");
 
         int32_t points = result->getInt("points");
+        uint32_t userId = result->getInt("playerUserId");
         bool won = result->getBoolean("playerWon");
         std::string playerCountry = result->getString("playerCountry");
 
@@ -781,7 +792,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
             continue;
         }
 
-        game->addPlayer(0, playerName, faction, won, points, 0.0, 0.0);
+        game->addPlayer(userId, playerName, faction, won, points, 0.0, 0.0);
     }
 
     return games;
@@ -860,7 +871,7 @@ void DatabaseConnection::writePlayerRatings(
     {
         // Check if expected columns exist.
         std::set<std::string> requiredColumns = {
-            "user_id", "ladder_id", "rating", "elo_rank",
+            "user_id", "ladder_id", "rating", "deviation", "elo_rank",
             "alltime_rank", "rated_games", "active", "created_at", "updated_at"
         };
 
@@ -889,13 +900,6 @@ void DatabaseConnection::writePlayerRatings(
             }
         }
 
-        // Clear table.
-        std::unique_ptr<sql::PreparedStatement> truncateStmt(
-            _connection->prepareStatement("TRUNCATE TABLE user_ratings")
-        );
-        truncateStmt->execute();
-        Log::info() << "Table 'user_ratings' truncated.";
-
         // Get ladder id.
         uint32_t ladderId = 0;
         std::unique_ptr<sql::PreparedStatement> ladderStmt(
@@ -914,12 +918,20 @@ void DatabaseConnection::writePlayerRatings(
             return;
         }
 
+        // Remove old entries.
+        std::unique_ptr<sql::PreparedStatement> removeStmt(
+            _connection->prepareStatement("DELETE FROM user_ratings WHERE ladder_id = ?")
+        );
+        removeStmt->setUInt(1, ladderId);
+        removeStmt->execute();
+        Log::info() << "Removed old entries from 'user_ratings'.";
+
         // Prepare statement to save user data.
         std::unique_ptr<sql::PreparedStatement> insertStmt(
             _connection->prepareStatement(R"SQL(
                 INSERT INTO user_ratings
-                (user_id, ladder_id, rating, elo_rank, alltime_rank, rated_games, active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                (user_id, ladder_id, rating, deviation, elo_rank, alltime_rank, rated_games, active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
             )SQL")
         );
 
@@ -927,19 +939,22 @@ void DatabaseConnection::writePlayerRatings(
         {
             const Player &player = players[userId];
             uint32_t gameCount = player.gameCount();
-            double elo = (gameMode == gamemodes::Blitz2v2) ? player.elo(factions::Combined) : player.maxRating(!player.isActive());
-            if (elo < 0.0)
+            factions::Faction faction = player.getBestFaction(false);
+
+            if (!player.isActive(faction) || gameMode == gamemodes::Blitz2v2)
             {
-                // Try to get any rating, even if the player was never active.
-                elo = player.elo(factions::Combined);
+                // Try to get any rating.
+                faction = factions::Combined;
             }
+
             insertStmt->setUInt(1, userId);
             insertStmt->setUInt(2, ladderId);
-            insertStmt->setInt(3, static_cast<int>(std::round(elo)));
-            insertStmt->setUInt(4, activeRanks.contains(userId) ? activeRanks[userId] : 0);
-            insertStmt->setUInt(5, allTimeRanks.contains(userId) ? allTimeRanks[userId] : 0);
-            insertStmt->setUInt(6, gameCount);
-            insertStmt->setBoolean(7, player.isActive());
+            insertStmt->setInt(3, static_cast<int>(std::round(player.elo(faction))));
+            insertStmt->setInt(4, static_cast<int>(std::round(player.deviation(faction))));
+            insertStmt->setUInt(5, activeRanks.contains(userId) ? activeRanks[userId] : 0);
+            insertStmt->setUInt(6, allTimeRanks.contains(userId) ? allTimeRanks[userId] : 0);
+            insertStmt->setUInt(7, gameCount);
+            insertStmt->setBoolean(8, player.isActive());
 
             insertStmt->execute();
         }

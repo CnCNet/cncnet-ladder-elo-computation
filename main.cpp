@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
 
     if (options.noDuplicates)
     {
-        Log::warning("Duplicates will be ignored.");
+        Log::warning() << "Duplicates will be ignored. The resulting ranks are meant to testing purposes only.";
     }
 
     Players players;
@@ -118,15 +118,14 @@ int main(int argc, char* argv[])
             {
                 Log::debug() << "Player '" << playerName << "' is still unknown. Trying to find that player in the db.";
 
-                // Load the player first.
-                uint32_t temporaryUserId = connection.loadPlayer(playerName, players, game.ladderAbbreviation());
-
                 if (options.noDuplicates)
                 {
-                    userId = temporaryUserId;
+                    userId = connection.loadPlayer(playerName, players, game.ladderAbbreviation());;
                 }
                 else if (options.cncnetDuplicates)
                 {
+                    uint32_t temporaryUserId = connection.loadPlayer(playerName, players, game.ladderAbbreviation());
+
                     // Known users are for the current ladder only, but ra2 ladder might contain yr
                     // player from 02/2022 and 04/2022. It might also contains player from ra2-new-maps.
                     if (!connection.knownUser(temporaryUserId) && game.ladderAbbreviation() == options.ladderAbbreviation)
@@ -176,19 +175,27 @@ int main(int argc, char* argv[])
                 else
                 {
                     // Use duplicates based on primary user id.
-                    uint32_t temporaryUserId = connection.loadPlayer(playerName, players, game.ladderAbbreviation());
-
-                    // Known users are for the current ladder only, but ra2 ladder might contain yr
-                    // player from 02/2022 and 04/2022. It might also contains player from ra2-new-maps.
-                    if (!connection.knownUser(temporaryUserId) && game.ladderAbbreviation() == options.ladderAbbreviation)
+                    uint32_t temporaryUserId = game.userId(i);
+                    if (!connection.loadPlayerWithNoUser(temporaryUserId, players, game.ladderAbbreviation()))
                     {
-                        Log::error() << "Did not expect player '" << playerName << "' (" << temporaryUserId << ") to have played a game.";
+                        Log::error() << "Unable to load user with id " << temporaryUserId << ".";
                         continue;
                     }
 
                     Player &player = players[temporaryUserId];
+                    Log::verbose() << "User " << temporaryUserId << " has primary user id " << player.primaryUserId();
+
                     if (player.primaryUserId() != 0 && player.primaryUserId() != temporaryUserId)
                     {
+                        if (!connection.loadPlayerWithNoUser(player.primaryUserId(), players, game.ladderAbbreviation()))
+                        {
+                            Log::error() << "Unable to load primary user  with id " << player.primaryUserId() << ".";
+                            continue;
+                        }
+
+                        Log::info() << "Resolved duplicate #" << temporaryUserId << " to #" << player.primaryUserId()
+                                    << (player.hasAlias() ? player.alias() : "") << ".";
+
                         players.markDuplicates(player.primaryUserId(), {temporaryUserId});
                         userId = player.primaryUserId();
                     }

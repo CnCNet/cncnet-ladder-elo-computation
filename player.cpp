@@ -244,7 +244,7 @@ double Player::yesterdaysMaxRating(bool includeInactive) const
 
 /*!
  */
-factions::Faction Player::getBestActiveFaction() const
+factions::Faction Player::getBestFaction(bool includeInactive) const
 {
     factions::Faction bestFaction = factions::Combined;
     double maxRating = -1.0;
@@ -252,7 +252,7 @@ factions::Faction Player::getBestActiveFaction() const
     for (size_t i = 0; i < _factionStatusList.size(); i++)
     {
         factions::Faction currentFaction = factions::toFaction(i);
-        if (this->isActive(currentFaction) && this->elo(currentFaction) > maxRating)
+        if ((this->isActive(currentFaction) || includeInactive) && this->elo(currentFaction) > maxRating)
         {
             bestFaction = currentFaction;
             maxRating = this->elo(currentFaction);
@@ -261,7 +261,6 @@ factions::Faction Player::getBestActiveFaction() const
 
     return bestFaction;
 }
-
 
 /*!
  */

@@ -305,7 +305,7 @@ std::map<uint32_t, uint32_t> Players::exportActivePlayers(const std::filesystem:
         jsonPlayer["delta_rank"] = rankYesterday - static_cast<int>(i + 1);
         jsonPlayer["name"] = player->alias();
 
-        factions::Faction faction = (gameMode == gamemodes::Blitz2v2) ? factions::Combined : player->getBestActiveFaction();
+        factions::Faction faction = (gameMode == gamemodes::Blitz2v2) ? factions::Combined : player->getBestFaction();
         jsonPlayer["faction"] = factions::shortName(faction);
 
         std::ostringstream oss;
