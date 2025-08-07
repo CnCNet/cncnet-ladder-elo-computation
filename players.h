@@ -83,6 +83,9 @@ public:
     //! Export all players in alphabetical order, who are or were active.
     void exportAlphabeticalOrder(const std::filesystem::path &directory, gamemodes::GameMode gameMode) const;
 
+    //! Export all players with their corresponding id.
+    void exportAllPlayers(const std::filesystem::path &directory, gamemodes::GameMode gameMode) const;
+
     //! Export new players, who have not been active so far.
     void exportNewPlayers(const std::filesystem::path &directory, gamemodes::GameMode gameMode) const;
 
@@ -96,9 +99,6 @@ private:
 private:
     //! Get the user id from a nick. First key is the ladder.
     std::map<std::string, std::map<std::string, uint32_t>> _nickToUserId;
-
-    //! List of duplicates to each user id.
-    std::map<uint32_t, uint32_t> _duplicates;
 
     //! List of user ids, which are just test accounts.
     std::set<uint32_t> _testAccounts;

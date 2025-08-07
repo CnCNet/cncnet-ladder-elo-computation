@@ -298,3 +298,25 @@ In short:
   - **Games against unknown players have little to no effect.**
 
 If you want to climb, you’ll need to prove your skill against a variety of active, stable opponents.
+
+# Version history
+
+### 1.0.0
+
+- Initial version
+
+### 1.0.1
+
+- Sets day change to UTC+9
+
+### 1.0.2
+
+- Minor timezone fix
+
+### 1.0.3
+
+- Write ratings to database (user_ratings)
+
+### 1.0.4
+
+- Uses confirmed duplicates from CnCNet by default, can still use old algorithm to detect duplicates or ignore duplicates at all

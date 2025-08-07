@@ -16,6 +16,8 @@ Options::Options(int argc, char* argv[])
         ("h,help", "Show help.")
         ("d,dry-run", "Run without writing any results (test mode).")
         ("s,statistics", "Export additional player and map statistics.")
+        ("cncnet-duplicates", "Use duplicate detection based on IP just like cncnet does.")
+        ("no-duplicates", "No duplicate detection at all. Every user id gets is own elo.")
         ("e,end", "Set the end date (format: YYYY-MM-DD). Only games before this date are considered.",
          cxxopts::value<std::string>())
         ("i,timeshift", "Add a time shift for all games to fix time zone issues.",
@@ -36,6 +38,7 @@ Options::Options(int argc, char* argv[])
          cxxopts::value<std::string>())
         ("t,tournament-games", "Add tournament games from this file.",
          cxxopts::value<std::string>());
+
 
     auto result = options.parse(argc, argv);
 
@@ -123,6 +126,8 @@ Options::Options(int argc, char* argv[])
 
     dryRun = result["dry-run"].as<bool>();
     exportFullStats = result["statistics"].as<bool>();
+    cncnetDuplicates = result["cncnet-duplicates"].as<bool>();
+    noDuplicates = result["no-duplicates"].as<bool>();
 
     timeShiftInHours = result["timeshift"].as<int>();
 

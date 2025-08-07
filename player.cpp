@@ -24,8 +24,9 @@ Player::Player() :
 
 /*!
  */
-Player::Player(uint32_t userId, const std::string &username, gamemodes::GameMode gameMode) :
+Player::Player(uint32_t userId, uint32_t primaryUserId, const std::string &username, gamemodes::GameMode gameMode) :
     _userId(userId),
+    _primaryUserId(primaryUserId),
     _account(username)
 {
 
@@ -62,13 +63,20 @@ Player::~Player()
  */
 uint32_t Player::userId() const
 {
-    if (_userId == 0xFFFFFFFF)
+    if (_userId == 0)
     {
         // Default constructor was called (probably by some container) but left
         // uninitialized.
         throw std::runtime_error("Asking for the user id of an uninitialized user.");
     }
     return _userId;
+}
+
+/*!
+ */
+uint32_t Player::primaryUserId() const
+{
+    return _primaryUserId;
 }
 
 /*!
@@ -236,7 +244,7 @@ double Player::yesterdaysMaxRating(bool includeInactive) const
 
 /*!
  */
-factions::Faction Player::getBestActiveFaction() const
+factions::Faction Player::getBestFaction(bool includeInactive) const
 {
     factions::Faction bestFaction = factions::Combined;
     double maxRating = -1.0;
@@ -244,7 +252,7 @@ factions::Faction Player::getBestActiveFaction() const
     for (size_t i = 0; i < _factionStatusList.size(); i++)
     {
         factions::Faction currentFaction = factions::toFaction(i);
-        if (this->isActive(currentFaction) && this->elo(currentFaction) > maxRating)
+        if ((this->isActive(currentFaction) || includeInactive) && this->elo(currentFaction) > maxRating)
         {
             bestFaction = currentFaction;
             maxRating = this->elo(currentFaction);
@@ -253,7 +261,6 @@ factions::Faction Player::getBestActiveFaction() const
 
     return bestFaction;
 }
-
 
 /*!
  */

@@ -70,7 +70,7 @@ class Player
 {
 public:
     //! Constructor.
-    Player(uint32_t userId, const std::string &username, gamemodes::GameMode gameMode = gamemodes::Unknown);
+    Player(uint32_t userId, uint32_t primaryUserId, const std::string &username, gamemodes::GameMode gameMode = gamemodes::Unknown);
 
     //! Constructor for illegal player.
     Player();
@@ -81,6 +81,9 @@ public:
 public:
     //! Get the user id.
     uint32_t userId() const;
+
+    //! Get the primary user id.
+    uint32_t primaryUserId() const;
 
     //! The the players account name.
     void setAccount(const std::string &account);
@@ -170,9 +173,9 @@ public:
     bool wasActiveBefore(const std::chrono::year_month_day &date, factions::Faction faction) const;
 
     //! The players best active faction.
-    factions::Faction getBestActiveFaction() const;
+    factions::Faction getBestFaction(bool includeInactive = false) const;
 
-    //! Get the maximum rating for this players. Return the rating of
+    //! Get the maximum rating for this players. Returns the rating of
     //! the highest active rating.
     double maxRating(bool includeInactive = false) const;
 
@@ -243,6 +246,9 @@ public:
 private:
     //! User id. 0 if invalid player.
     uint32_t _userId = 0;
+
+    //! Primary user id. Points to the primary account if this is a duplicate.
+    uint32_t _primaryUserId = 0;
 
     //! Number of wins.
     uint32_t _wins;

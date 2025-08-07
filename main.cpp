@@ -51,38 +51,51 @@ int main(int argc, char* argv[])
     Log::info() << "Running elogen V" << PROJECT_VERSION << ".";
     Log::info() << "End date is " << options.endDate << ".";
     Log::info() << "Starting ELO computation.";
-    Log::info() << "Initiating duplicates.";
-    connection.initDuplicates();
 
-    // Some known duplicates, some not recognized by cncnet. That's why they are set manually.
-    connection.addDuplicates(  152, { 37747, 79486 });
-    connection.addDuplicates(  268, {    69 });
-    connection.addDuplicates( 3968, { 18319 });
-    connection.addDuplicates(17651, { 40343, 43364, 44568 });
-    connection.addDuplicates(19083, { 10459 });
-    connection.addDuplicates(19548, { 68698 });
-    connection.addDuplicates(33933, { 300, 5878 });
-    connection.addDuplicates(37077, { 58873, 59236, 59916, 68898, 68942, 71304 });
-    connection.addDuplicates(40500, {    24,  1029, 68169 });
-    connection.addDuplicates(44616, { 67416 });
-    connection.addDuplicates(47880, { 71623 });
-    connection.addDuplicates(53313, { 59298, 76620 });
-    connection.addDuplicates(54423, { 20498 });
-    connection.addDuplicates(55626, { 73649 }); // Also 39160, but auto-detected
-    connection.addDuplicates(58766, { 58764, 66502 });
-    connection.addDuplicates(59413, {   554, 61680 });
-    connection.addDuplicates(60300, { 61757, 65104, 65875 });
-    connection.addDuplicates(62077, { 56736 });
-    connection.addDuplicates(63398, { 63331 });
-    connection.addDuplicates(67132, { 1179 });
-    connection.addDuplicates(67596, { 36814 });
-    connection.addDuplicates(69904, { 73057, 75285, 78280});
-    connection.addDuplicates(60828, { 77657, 74819});
-    connection.addDuplicates(65311, { 81488 });
-    connection.removeDuplicate(56589);
-    connection.removeDuplicate(6026);
+    if (options.cncnetDuplicates)
+    {
+        // This is obsolete code and only used then a special commandline parameter is provided.
+        // Once the new duplicate detection is up and running, this option can be removed.
 
-    Log::info() << "Duplicates initiated.";
+        Log::info() << "Initiating CnCNet duplicates.";
+        connection.initDuplicates();
+
+        // Some known duplicates, some not recognized by cncnet. That's why they are set manually.
+        connection.addDuplicates(  152, { 37747, 79486 });
+        connection.addDuplicates(  268, {    69 });
+        connection.addDuplicates( 3968, { 18319, 66877 });
+        connection.addDuplicates(17651, { 40343, 43364, 44568 }); // This is actually wrong.
+        connection.addDuplicates(19083, { 10459 });
+        connection.addDuplicates(33933, { 300, 5878 });
+        connection.addDuplicates(40500, {    24,  1029, 68169 });
+        connection.addDuplicates(44616, { 67416 });
+
+        connection.addDuplicates(37077, { 58873, 59236, 59916, 68898, 68942, 71304 });
+        connection.addDuplicates(19548, { 68698 }); // Engi multiaccounts
+        connection.addDuplicates(69904, { 73057, 75285, 78280}); // IS THIS ENGI?
+        connection.addDuplicates(47880, { 71623 });
+        connection.addDuplicates(53313, { 59298, 76620 });
+        connection.addDuplicates(54423, { 20498 });
+        connection.addDuplicates(55626, { 73649 }); // Also 39160, but auto-detected
+        connection.addDuplicates(58766, { 58764, 66502 });
+        connection.addDuplicates(59413, {   554, 61680 });
+        connection.addDuplicates(60300, { 61757, 65104, 65875 });
+        connection.addDuplicates(62077, { 56736 });
+        connection.addDuplicates(63398, { 63331 });
+        connection.addDuplicates(67132, { 1179 });
+        connection.addDuplicates(67596, { 36814 });
+        connection.addDuplicates(60828, { 77657, 74819});
+        connection.addDuplicates(65311, { 81488 });
+        connection.removeDuplicate(56589);
+        connection.removeDuplicate(6026);
+
+        Log::info() << "CnCNet duplicates initiated.";
+    }
+
+    if (options.noDuplicates)
+    {
+        Log::warning() << "Duplicates will be ignored. The resulting ranks are meant to testing purposes only.";
+    }
 
     Players players;
     std::map<uint32_t, Game> games = connection.fetchGames();
@@ -105,54 +118,93 @@ int main(int argc, char* argv[])
             {
                 Log::debug() << "Player '" << playerName << "' is still unknown. Trying to find that player in the db.";
 
-                // Load the player first.
-                uint32_t temporaryUserId = connection.loadPlayer(playerName, players, game.ladderAbbreviation());
-
-                // Known users are for the current ladder only, but ra2 ladder might contain yr
-                // player from 02/2022 and 04/2022. It might also contains player from ra2-new-maps.
-                if (!connection.knownUser(temporaryUserId) && game.ladderAbbreviation() == options.ladderAbbreviation)
+                if (options.noDuplicates)
                 {
-                    Log::error() << "Did not expect player '" << playerName << "' (" << temporaryUserId << ") to have played a game.";
-                    continue;
+                    userId = connection.loadPlayer(playerName, players, game.ladderAbbreviation());;
                 }
-
-                // Now load its duplicates.
-                std::set<uint32_t> duplicates = connection.getDuplicates(temporaryUserId);
-                Log::verbose(!duplicates.empty()) << "Duplicates of user " << temporaryUserId << " are: " << duplicates;
-
-                std::set<uint32_t> forbiddenBaseAccounts;
-
-                for (uint32_t duplicate : duplicates)
+                else if (options.cncnetDuplicates)
                 {
-                    if (players.contains(duplicate))
+                    uint32_t temporaryUserId = connection.loadPlayer(playerName, players, game.ladderAbbreviation());
+
+                    // Known users are for the current ladder only, but ra2 ladder might contain yr
+                    // player from 02/2022 and 04/2022. It might also contains player from ra2-new-maps.
+                    if (!connection.knownUser(temporaryUserId) && game.ladderAbbreviation() == options.ladderAbbreviation)
                     {
-                        Log::warning() << "User " << duplicate << " already loaded while processing duplicates. This is not supposed to happen.";
+                        Log::error() << "Did not expect player '" << playerName << "' (" << temporaryUserId << ") to have played a game.";
                         continue;
                     }
 
-                    if (!connection.loadPlayer(duplicate, players, game.ladderAbbreviation()))
+                    // Now load its duplicates.
+                    std::set<uint32_t> duplicates = connection.getDuplicates(temporaryUserId);
+                    Log::verbose(!duplicates.empty()) << "Duplicates of user " << temporaryUserId << " are: " << duplicates;
+
+                    std::set<uint32_t> forbiddenBaseAccounts;
+
+                    for (uint32_t duplicate : duplicates)
                     {
-                        if (!connection.loadPlayerWithNoUser(duplicate, players, game.ladderAbbreviation()))
+                        if (players.contains(duplicate))
                         {
-                            Log::info() << "User " << duplicate << " not part of table 'users' and thus cannot "
-                                        << "be used as a base account.";
-                            forbiddenBaseAccounts.insert(duplicate);
+                            Log::warning() << "User " << duplicate << " already loaded while processing duplicates. This is not supposed to happen.";
+                            continue;
                         }
+
+                        if (!connection.loadPlayer(duplicate, players, game.ladderAbbreviation()))
+                        {
+                            if (!connection.loadPlayerWithNoUser(duplicate, players, game.ladderAbbreviation()))
+                            {
+                                Log::info() << "User " << duplicate << " not part of table 'users' and thus cannot "
+                                            << "be used as a base account.";
+                                forbiddenBaseAccounts.insert(duplicate);
+                            }
+                        }
+                    }
+
+                    // Get the base user account. Might be the current id, that's why
+                    // it is inserted in the list of duplicates.
+                    duplicates.insert(temporaryUserId);
+                    userId = connection.getBaseAccount(duplicates, forbiddenBaseAccounts);
+                    duplicates.erase(userId);
+                    Log::debug(!duplicates.empty()) << "Final duplicates of user " << userId << " are: " << duplicates;
+
+                    // Consider all duplicates and link all available player names to the base account.
+                    players.markDuplicates(userId, duplicates);
+                    Log::fatal(userId != players.userId(playerName, game.ladderAbbreviation()))
+                        << "Processing of duplicates went wrong (" << userId
+                         << " != " << players.userId(playerName, game.ladderAbbreviation()) << ").";
+                }
+                else
+                {
+                    // Use duplicates based on primary user id.
+                    uint32_t temporaryUserId = game.userId(i);
+                    if (!connection.loadPlayerWithNoUser(temporaryUserId, players, game.ladderAbbreviation()))
+                    {
+                        Log::error() << "Unable to load user with id " << temporaryUserId << ".";
+                        continue;
+                    }
+
+                    Player &player = players[temporaryUserId];
+                    Log::verbose() << "User " << temporaryUserId << " has primary user id " << player.primaryUserId();
+
+                    if (player.primaryUserId() != 0 && player.primaryUserId() != temporaryUserId)
+                    {
+                        if (!connection.loadPlayerWithNoUser(player.primaryUserId(), players, game.ladderAbbreviation()))
+                        {
+                            Log::error() << "Unable to load primary user  with id " << player.primaryUserId() << ".";
+                            continue;
+                        }
+
+                        Log::info() << "Resolved duplicate #" << temporaryUserId << " to #" << player.primaryUserId()
+                                    << (player.hasAlias() ? player.alias() : "") << ".";
+
+                        players.markDuplicates(player.primaryUserId(), {temporaryUserId});
+                        userId = player.primaryUserId();
+                    }
+                    else
+                    {
+                        userId = temporaryUserId;
                     }
                 }
 
-                // Get the base user account. Might be the current id, that's why
-                // it is inserted in the list of duplicates.
-                duplicates.insert(temporaryUserId);
-                userId = connection.getBaseAccount(duplicates, forbiddenBaseAccounts);
-                duplicates.erase(userId);
-                Log::debug(!duplicates.empty()) << "Final duplicates of user " << userId << " are: " << duplicates;
-
-                // Consider all duplicates and link all available player names to the base account.
-                players.markDuplicates(userId, duplicates);
-                Log::fatal(userId != players.userId(playerName, game.ladderAbbreviation()))
-                    << "Processing of duplicates went wrong (" << userId
-                     << " != " << players.userId(playerName, game.ladderAbbreviation()) << ").";
             }
 
             game.setPlayer(i, userId);
@@ -347,6 +399,7 @@ int main(int argc, char* argv[])
     players.exportMostDaysActive(options.outputDirectory, options.gameMode);
     players.exportAlphabeticalOrder(options.outputDirectory, options.gameMode);
     players.exportNewPlayers(options.outputDirectory, options.gameMode);
+    players.exportAllPlayers(options.outputDirectory, options.gameMode);
 
     for (auto it = ignoredMaps.begin(); it != ignoredMaps.end(); ++it)
     {
