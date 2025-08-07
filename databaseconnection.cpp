@@ -918,46 +918,60 @@ void DatabaseConnection::writePlayerRatings(
             return;
         }
 
-        // Remove old entries.
-        std::unique_ptr<sql::PreparedStatement> removeStmt(
-            _connection->prepareStatement("DELETE FROM user_ratings WHERE ladder_id = ?")
-        );
-        removeStmt->setUInt(1, ladderId);
-        removeStmt->execute();
-        Log::info() << "Removed old entries from 'user_ratings'.";
+        _connection->setAutoCommit(false);
 
-        // Prepare statement to save user data.
-        std::unique_ptr<sql::PreparedStatement> insertStmt(
-            _connection->prepareStatement(R"SQL(
-                INSERT INTO user_ratings
-                (user_id, ladder_id, rating, deviation, elo_rank, alltime_rank, rated_games, active, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-            )SQL")
-        );
-
-        for (uint32_t userId : players.userIds())
+        try
         {
-            const Player &player = players[userId];
-            uint32_t gameCount = player.gameCount();
-            factions::Faction faction = player.getBestFaction(false);
+            // Remove old entries.
+            std::unique_ptr<sql::PreparedStatement> removeStmt(
+                _connection->prepareStatement("DELETE FROM user_ratings WHERE ladder_id = ?")
+            );
+            removeStmt->setUInt(1, ladderId);
+            removeStmt->execute();
+            Log::info() << "Removed old entries from 'user_ratings'.";
 
-            if (!player.isActive(faction) || gameMode == gamemodes::Blitz2v2)
+            // Prepare statement to save user data.
+            std::unique_ptr<sql::PreparedStatement> insertStmt(
+                _connection->prepareStatement(R"SQL(
+                    INSERT INTO user_ratings
+                    (user_id, ladder_id, rating, deviation, elo_rank, alltime_rank, rated_games, active, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                )SQL")
+            );
+
+            for (uint32_t userId : players.userIds())
             {
-                // Try to get any rating.
-                faction = factions::Combined;
+                const Player &player = players[userId];
+                uint32_t gameCount = player.gameCount();
+                factions::Faction faction = player.getBestFaction(false);
+
+                if (!player.isActive(faction) || gameMode == gamemodes::Blitz2v2)
+                {
+                    // Try to get any rating.
+                    faction = factions::Combined;
+                }
+
+                insertStmt->setUInt(1, userId);
+                insertStmt->setUInt(2, ladderId);
+                insertStmt->setInt(3, static_cast<int>(std::round(player.elo(faction))));
+                insertStmt->setInt(4, static_cast<int>(std::round(player.deviation(faction))));
+                insertStmt->setUInt(5, activeRanks.contains(userId) ? activeRanks[userId] : 0);
+                insertStmt->setUInt(6, allTimeRanks.contains(userId) ? allTimeRanks[userId] : 0);
+                insertStmt->setUInt(7, gameCount);
+                insertStmt->setBoolean(8, player.isActive());
+
+                insertStmt->execute();
             }
 
-            insertStmt->setUInt(1, userId);
-            insertStmt->setUInt(2, ladderId);
-            insertStmt->setInt(3, static_cast<int>(std::round(player.elo(faction))));
-            insertStmt->setInt(4, static_cast<int>(std::round(player.deviation(faction))));
-            insertStmt->setUInt(5, activeRanks.contains(userId) ? activeRanks[userId] : 0);
-            insertStmt->setUInt(6, allTimeRanks.contains(userId) ? allTimeRanks[userId] : 0);
-            insertStmt->setUInt(7, gameCount);
-            insertStmt->setBoolean(8, player.isActive());
-
-            insertStmt->execute();
+            _connection->commit();
         }
+        catch (sql::SQLException &e)
+        {
+            _connection->rollback();
+            Log::fatal() << "Error while writing user ratings: " << e.what();
+        }
+
+        _connection->setAutoCommit(true);
 
         Log::info() << "Player ratings written to 'user_ratings'.";
     }
