@@ -30,10 +30,6 @@ public:
     //! Do we have pending games?
     bool hasPendingGames() const;
 
-    //! Get the index of a player based on the quick match name.
-    //! Returns 0 if no player is found.
-    uint32_t userId(const std::string &nick, const std::string &ladderName) const;
-
     //! Get all user ids.
     std::vector<uint32_t> userIds() const;
 
@@ -52,9 +48,6 @@ public:
 
     //! Get the number of currently active players.
     uint32_t activePlayerCount() const;
-
-    //! Link the duplicates the given user id.
-    void markDuplicates(uint32_t id, const std::set<uint32_t>& duplicates);
 
     //! Is this account a test account?
     bool isTestAccount(uint32_t userId) const;
