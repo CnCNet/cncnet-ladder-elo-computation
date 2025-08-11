@@ -59,34 +59,40 @@ std::vector<uint32_t> Players::userIds() const
 
 /*!
  */
-Player& Players::operator[](uint32_t index)
+Player &Players::operator [](uint32_t index)
 {
     if (index == 0)
     {
         Log::error() << "Player with user id 0 is not supposed to exist.";
     }
 
-    if (!_players.contains(index))
+    auto it = _players.find(index);
+    if (it == _players.end())
     {
         Log::fatal() << "No player for index " << index << ".";
         throw std::runtime_error("Accessing non-existing player.");
     }
 
-    return _players[index];
+    return it->second;
 }
 
 /*!
  */
-Player Players::operator[](uint32_t index) const
+const Player& Players::operator[](uint32_t index) const
 {
     if (index == 0)
     {
         Log::error() << "Player with user id 0 is not supposed to exist.";
     }
 
-    Log::fatal(!_players.contains(index)) << "No player for index " << index << ". An exception will be thrown.";
+    auto it = _players.find(index);
+    if (it == _players.end())
+    {
+        Log::fatal() << "No player for index " << index << ". An exception will be thrown.";
+        throw std::runtime_error("Accessing non-existing player.");
+    }
 
-    return _players.at(index);
+    return it->second;
 }
 
 /*!
@@ -174,7 +180,7 @@ bool Players::hasPendingGames() const
 {
     bool hasPendingGames = false;
 
-    for (std::map<uint32_t, Player>::const_iterator it = _players.begin(); it != _players.end() && !hasPendingGames; ++it)
+    for (std::unordered_map<uint32_t, Player>::const_iterator it = _players.begin(); it != _players.end() && !hasPendingGames; ++it)
     {
         hasPendingGames |= (it->second.pendingGameCount() > 0);
     }
@@ -186,7 +192,7 @@ bool Players::hasPendingGames() const
  */
 void Players::apply(std::chrono::year_month_day date, bool decay, gamemodes::GameMode gameMode)
 {
-    for (std::map<uint32_t, Player>::iterator it = _players.begin(); it != _players.end(); ++it)
+    for (std::unordered_map<uint32_t, Player>::iterator it = _players.begin(); it != _players.end(); ++it)
     {
         Player &player = it->second;
         player.apply(date, decay, gameMode);
@@ -203,7 +209,7 @@ uint32_t Players::activePlayerCount() const
 {
     uint32_t result = 0;
 
-    for (std::map<uint32_t, Player>::const_iterator it = _players.begin(); it != _players.end(); ++it)
+    for (std::unordered_map<uint32_t, Player>::const_iterator it = _players.begin(); it != _players.end(); ++it)
     {
         result += it->second.isActive() ? 1 : 0;
     }
@@ -754,7 +760,7 @@ void Players::exportNewPlayers(const std::filesystem::path &directory, gamemodes
  */
 void Players::finalize()
 {
-    for (std::map<uint32_t, Player>::iterator it = _players.begin(); it != _players.end(); ++it)
+    for (std::unordered_map<uint32_t, Player>::iterator it = _players.begin(); it != _players.end(); ++it)
     {
         it->second.finalize();
     }

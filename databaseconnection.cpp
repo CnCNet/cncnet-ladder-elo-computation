@@ -114,6 +114,8 @@ void DatabaseConnection::initDuplicates()
             }
         }
     }
+
+    outputDuplicates(_duplicates);
 }
 
 /*!
@@ -140,13 +142,13 @@ void DatabaseConnection::addDuplicates(uint32_t userId, std::set<uint32_t> dupli
 
 /*!
  */
-void DatabaseConnection::removeDuplicate(uint32_t userId)
+void DatabaseConnection::removeDuplicate(std::map<uint32_t, std::set<uint32_t>> &duplicates, uint32_t userId)
 {
-    _duplicates[userId].clear();
+    duplicates[userId].clear();
 
     Log::info() << "Removing duplicates for " << userId << ".";
 
-    for (auto it = _duplicates.begin(); it != _duplicates.end(); ++it)
+    for (auto it = duplicates.begin(); it != duplicates.end(); ++it)
     {
         std::set<uint32_t> &set = it->second;
         if (set.contains(userId))
@@ -478,6 +480,65 @@ uint32_t DatabaseConnection::loadPlayer(
 
 /*!
  */
+void DatabaseConnection::loadUsers(const std::set<uint32_t> &userIds, Players &players)
+{
+    if (userIds.empty())
+    {
+        Log::warning() << "No user ids provided.";
+        return;
+    }
+
+    const size_t chunkSize = 500;
+    auto it = userIds.begin();
+
+    while (it != userIds.end())
+    {
+        std::vector<uint32_t> chunk;
+        chunk.reserve(chunkSize);
+        std::stringstream query;
+
+        query << R"SQL(
+            SELECT
+                id,
+                alias
+            FROM users
+                WHERE id IN (
+        )SQL";
+
+        for (size_t i = 0; i < chunkSize && it != userIds.end(); ++i, ++it)
+        {
+            query << ((i > 0) ? "," : "");
+            query << "?";
+            chunk.push_back(*it);
+        }
+
+        query << ");";
+
+        std::unique_ptr<sql::PreparedStatement> stmt(_connection->prepareStatement(query.str()));
+        for (size_t i = 0; i < chunk.size(); i++)
+        {
+            stmt->setUInt(i + 1, chunk[i]);
+        }
+
+        std::unique_ptr<sql::ResultSet> result(stmt->executeQuery());
+
+        while (result->next())
+        {
+            uint32_t userId = result->getUInt("id");
+            std::string alias = result->getString("alias");
+            Player player(userId, userId, "", _gameMode);
+            if (!alias.empty())
+            {
+                player.setAlias(alias);
+            }
+            std::cout << "USER: " << userId << " " << alias << std::endl;
+            players.add(player, _ladder);
+        }
+    }
+}
+
+/*!
+ */
 bool DatabaseConnection::loadPlayerWithNoUser(
     uint32_t userId,
     Players &players,
@@ -527,6 +588,7 @@ bool DatabaseConnection::loadPlayerWithNoUser(
 
     return false;
 }
+
 /*!
  */
 bool DatabaseConnection::loadPlayer(
@@ -580,6 +642,183 @@ bool DatabaseConnection::loadPlayer(
 
     Log::debug() << "Unable to load player " << userId << " from table 'users'.";
     return false;
+}
+
+/*!
+ */
+std::string DatabaseConnection::loadAlias(uint32_t userId)
+{
+    std::string sql = "SELECT id, alias FROM users WHERE id = ?;";
+    std::unique_ptr<sql::PreparedStatement> statement(_connection->prepareStatement(sql));
+    statement->setUInt(1, userId);
+    std::unique_ptr<sql::ResultSet> result(statement->executeQuery());
+
+    while (result->next())
+    {
+        std::string currentAlias = result->getString("alias");
+        if (!currentAlias.empty())
+        {
+            return currentAlias;
+        }
+    }
+
+    return std::string();
+}
+
+/*!
+ */
+std::unordered_map<uint32_t, uint32_t> DatabaseConnection::cncnetDuplicateMapping(const std::map<uint32_t, uint32_t> &userIds)
+{
+    std::unordered_map<uint32_t, uint32_t> result;
+    std::map<uint32_t, std::set<uint32_t>> temporaryDuplicates;
+
+    // First, use recent-IP algorithm to determine duplicates.
+    for (const auto& [userId, gameCount] : userIds)
+    {
+        Log::verbose() << "User " << userId << " has played " << gameCount << " games.";
+        temporaryDuplicates[userId] = std::set<uint32_t>();
+        std::set<uint32_t> duplicates = getWebLikeDuplicateAccounts(userId);
+        for (uint32_t duplicate : duplicates)
+        {
+            Log::verbose() << "User #" << duplicate << " is a duplicate of #" << userId << ".";
+            temporaryDuplicates[userId].insert(duplicate);
+            temporaryDuplicates[duplicate].insert(userId);
+
+            for (uint32_t x : duplicates)
+            {
+                if (x != duplicate)
+                {
+                    temporaryDuplicates[duplicate].insert(x);
+                }
+            }
+        }
+    }
+
+    // Next, add some well known duplicates, which are not detected by recent IP.
+    temporaryDuplicates[  152].insert({ 37747, 79486 });
+    temporaryDuplicates[  268].insert({    69 });
+    temporaryDuplicates[ 3968].insert({ 18319, 66877 });
+    temporaryDuplicates[17651].insert({ 40343, 43364, 44568 }); // This is actually wrong.
+    temporaryDuplicates[19083].insert({ 10459 });
+    temporaryDuplicates[33933].insert({ 300, 5878 });
+    temporaryDuplicates[40500].insert({    24,  1029, 68169 });
+    temporaryDuplicates[44616].insert({ 67416 });
+    temporaryDuplicates[37077].insert({ 58873, 59236, 59916, 68898, 68942, 71304 });
+    temporaryDuplicates[19548].insert({ 68698 });
+    temporaryDuplicates[69904].insert({ 73057, 75285, 78280});
+    temporaryDuplicates[47880].insert({ 71623 });
+    temporaryDuplicates[53313].insert({ 59298, 76620 });
+    temporaryDuplicates[54423].insert({ 20498 });
+    temporaryDuplicates[55626].insert({ 73649 });
+    temporaryDuplicates[58766].insert({ 58764, 66502 });
+    temporaryDuplicates[59413].insert({   554, 61680 });
+    temporaryDuplicates[60300].insert({ 61757, 65104, 65875 });
+    temporaryDuplicates[62077].insert({ 56736 });
+    temporaryDuplicates[63398].insert({ 63331 });
+    temporaryDuplicates[67132].insert({ 1179 });
+    temporaryDuplicates[67596].insert({ 36814 });
+    temporaryDuplicates[60828].insert({ 77657, 74819});
+    temporaryDuplicates[65311].insert({ 81488 });
+    removeDuplicate(temporaryDuplicates, 56589);
+    removeDuplicate(temporaryDuplicates, 6026);
+
+    outputDuplicates(temporaryDuplicates);
+
+    // Next, find the best primary account for each player.
+    for (auto& [currentPrimary, duplicates] : temporaryDuplicates)
+    {
+        uint32_t currentBestPrimary = 0;
+        uint32_t mostGames = 0;
+        duplicates.insert(currentPrimary);
+
+        for (uint32_t duplicate : duplicates)
+        {
+            std::string alias = loadAlias(duplicate);
+            if (!alias.empty())
+            {
+                currentBestPrimary = duplicate;
+                break;
+            }
+
+            auto it = userIds.find(duplicate);
+            uint32_t gamesPlayed = (it == userIds.end()) ? 0 : it->second;
+
+            if (gamesPlayed > mostGames)
+            {
+                mostGames = it->second;
+                currentBestPrimary = duplicate;
+            }
+        }
+
+        if (currentBestPrimary == 0)
+        {
+            Log::critical() << "No best primary account found.";
+        }
+
+        for (uint32_t duplicate : duplicates)
+        {
+            result[duplicate] = currentBestPrimary;
+        }
+    }
+
+    return result;
+}
+
+/*!
+ */
+std::unordered_map<uint32_t, uint32_t> DatabaseConnection::duplicateToPrimaryMapping(const std::map<uint32_t, uint32_t> userIds)
+{
+    std::unordered_map<uint32_t, uint32_t> result;
+
+    if (userIds.empty())
+    {
+        Log::error() << "No user ids for duplicate mapping.";
+        return result;
+    }
+
+    const size_t chunkSize = 500;
+    auto it = userIds.begin();
+    while (it != userIds.end())
+    {
+        std::ostringstream query;
+        query << R"sql(
+            SELECT
+                id,
+                primary_user_id
+            FROM users
+            WHERE id IN (
+        )sql";
+
+        for (size_t i = 0; i < chunkSize && it != userIds.end(); ++i, ++it)
+        {
+            if (i > 0)
+            {
+                query << ",";
+            }
+            query << it->first;
+        }
+        query << ");";
+
+        std::unique_ptr<sql::PreparedStatement> stmt(_connection->prepareStatement(query.str()));
+        stmt->execute();
+        std::unique_ptr<sql::ResultSet> queryResult(stmt->executeQuery());
+
+        while (queryResult->next())
+        {
+            uint32_t userId = queryResult->getUInt("id");
+            uint32_t primaryId = queryResult->getUInt("primary_user_id");
+            if (primaryId != 0 && primaryId != userId)
+            {
+                result[userId] = primaryId;
+            }
+            else
+            {
+                result[userId] = userId;
+            }
+        }
+    }
+
+    return result;
 }
 
 /*!
@@ -979,4 +1218,68 @@ void DatabaseConnection::writePlayerRatings(
     {
         Log::fatal() << "Error while writing user ratings: " << e.what();
     }
+}
+
+/*!
+ */
+void DatabaseConnection::outputDuplicates(std::map<uint32_t, std::set<uint32_t>> &duplicates)
+{
+    // Unbalanced graph.
+    std::map<uint32_t, std::set<uint32_t>> adj;
+    for (const auto &kv : duplicates)
+    {
+        uint32_t k = kv.first;
+        adj[k];
+        for (uint32_t v : kv.second)
+        {
+            adj[k].insert(v);
+            adj[v].insert(k);
+        }
+    }
+
+    std::set<uint32_t> visited;
+    std::map<uint32_t, std::set<uint32_t>> result;
+
+    for (const auto &node : adj)
+    {
+        uint32_t start = node.first;
+        if (visited.count(start)) continue;
+
+        std::vector<uint32_t> stack = { start };
+        std::set<uint32_t> component;
+
+        while (!stack.empty())
+        {
+            uint32_t u = stack.back();
+            stack.pop_back();
+            if (visited.insert(u).second)
+            {
+                component.insert(u);
+                for (uint32_t w : adj[u])
+                {
+                    if (!visited.count(w)) stack.push_back(w);
+                }
+            }
+        }
+
+        if (!component.empty())
+        {
+            uint32_t rep = *component.begin();
+            std::set<uint32_t> others = component;
+            others.erase(rep);
+            result[rep] = std::move(others);
+        }
+    }
+
+    for (const auto &kv : result)
+    {
+        std::stringstream ss;
+        for (uint32_t id : kv.second)
+        {
+           ss << " " << id;
+        }
+        Log::verbose() << kv.first << ss.str();
+    }
+
+    duplicates = result;
 }

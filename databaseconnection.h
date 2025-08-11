@@ -2,6 +2,7 @@
 #pragma once
 
 #include <set>
+#include <unordered_set>
 
 #include <mysql_driver.h>
 #include <mysql_connection.h>
@@ -35,7 +36,7 @@ public:
     void addDuplicates(uint32_t userId, std::set<uint32_t> duplicates);
 
     //! Remove a duplicate.
-    void removeDuplicate(uint32_t userId);
+    void removeDuplicate(std::map<uint32_t, std::set<uint32_t> > &duplicates, uint32_t userId);
 
     //! Get the duplicates for a user id. Duplicated must have been initialized prior.
     std::set<uint32_t> getDuplicates(uint32_t userId);
@@ -59,13 +60,22 @@ public:
     //! Load a player from the database by its user_id.
     bool loadPlayer(uint32_t userId, Players &players, const std::string &ladderAbbreviation);
 
+    std::string loadAlias(uint32_t userId);
+
     //! Load a player from the database, who does not have an account anymore. This is probably
     //! a duplicate, that has been deleted. We still need all the player names assigned to the
     //! user id.
     bool loadPlayerWithNoUser(uint32_t userId, Players &players, const std::string &ladderAbbreviation);
+    void loadUsers(const std::set<uint32_t> &userIds, Players &players);
 
     //! Add all recent games from the database. The player id won't be set for the games.
     std::map<uint32_t, Game> fetchGames();
+
+    //! Get a map to get the primary user id (value) for each user (key):
+    std::unordered_map<uint32_t, uint32_t> duplicateToPrimaryMapping(const std::map<uint32_t, uint32_t> userIds);
+
+    //! Return a map with the key being the duplicate account and the value being the primary account.
+    std::unordered_map<uint32_t, uint32_t> cncnetDuplicateMapping(const std::map<uint32_t, uint32_t> &userIds);
 
     //! Get the base account to a list of user ids. This is the account with an alias
     //! or - if no alias exists - the account with the lowest number. Make sure not to use
@@ -74,6 +84,9 @@ public:
 
     //! Write data to table user_ratings;
     void writePlayerRatings(gamemodes::GameMode gameMode, const Players &players, std::map<uint32_t, uint32_t> activeRanks, std::map<uint32_t, uint32_t> allTimeRanks);
+
+    //! For testing purposes only.
+    void outputDuplicates(std::map<uint32_t, std::set<uint32_t>> &duplicates);
 
 private:
     //! Is the connection ready?

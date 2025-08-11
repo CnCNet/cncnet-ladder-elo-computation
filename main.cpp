@@ -52,58 +52,71 @@ int main(int argc, char* argv[])
     Log::info() << "End date is " << options.endDate << ".";
     Log::info() << "Starting ELO computation.";
 
-    if (options.cncnetDuplicates)
-    {
-        // This is obsolete code and only used then a special commandline parameter is provided.
-        // Once the new duplicate detection is up and running, this option can be removed.
-
-        Log::info() << "Initiating CnCNet duplicates.";
-        connection.initDuplicates();
-
-        // Some known duplicates, some not recognized by cncnet. That's why they are set manually.
-        connection.addDuplicates(  152, { 37747, 79486 });
-        connection.addDuplicates(  268, {    69 });
-        connection.addDuplicates( 3968, { 18319, 66877 });
-        connection.addDuplicates(17651, { 40343, 43364, 44568 }); // This is actually wrong.
-        connection.addDuplicates(19083, { 10459 });
-        connection.addDuplicates(33933, { 300, 5878 });
-        connection.addDuplicates(40500, {    24,  1029, 68169 });
-        connection.addDuplicates(44616, { 67416 });
-
-        connection.addDuplicates(37077, { 58873, 59236, 59916, 68898, 68942, 71304 });
-        connection.addDuplicates(19548, { 68698 }); // Engi multiaccounts
-        connection.addDuplicates(69904, { 73057, 75285, 78280}); // IS THIS ENGI?
-        connection.addDuplicates(47880, { 71623 });
-        connection.addDuplicates(53313, { 59298, 76620 });
-        connection.addDuplicates(54423, { 20498 });
-        connection.addDuplicates(55626, { 73649 }); // Also 39160, but auto-detected
-        connection.addDuplicates(58766, { 58764, 66502 });
-        connection.addDuplicates(59413, {   554, 61680 });
-        connection.addDuplicates(60300, { 61757, 65104, 65875 });
-        connection.addDuplicates(62077, { 56736 });
-        connection.addDuplicates(63398, { 63331 });
-        connection.addDuplicates(67132, { 1179 });
-        connection.addDuplicates(67596, { 36814 });
-        connection.addDuplicates(60828, { 77657, 74819});
-        connection.addDuplicates(65311, { 81488 });
-        connection.removeDuplicate(56589);
-        connection.removeDuplicate(6026);
-
-        Log::info() << "CnCNet duplicates initiated.";
-    }
-
-    if (options.noDuplicates)
-    {
-        Log::warning() << "Duplicates will be ignored. The resulting ranks are meant to testing purposes only.";
-    }
-
     Players players;
     std::map<uint32_t, Game> games = connection.fetchGames();
+
+    // Collect all user ids involved in games.
+    std::map<uint32_t, uint32_t> temporaryUserIds;
+    std::set<uint32_t> finalUserIds;
+
+    for (auto it = games.begin(); it != games.end(); ++it)
+    {
+        for (uint32_t i = 0; i < it->second.playerCount(); i++)
+        {
+            temporaryUserIds[it->second.userId(i)]++;
+            if (it->second.userId(i) == 0)
+            {
+                Log::error() << "Invalid user id in game " << it->second.id() << ".";
+            }
+        }
+    }
+
+    // Now create the mapping for each user id to its primary account.
+    std::unordered_map<uint32_t, uint32_t> duplicateToPrimary;
+
+    if (options.cncnetDuplicates)
+    {
+        duplicateToPrimary = connection.cncnetDuplicateMapping(temporaryUserIds);
+        for (const auto &[duplicate, primary] : duplicateToPrimary)
+        {
+            Log::verbose() << "#" << duplicate << " has primary #" << primary << ".";
+        }
+    }
+    else if (options.noDuplicates)
+    {
+        Log::warning() << "Duplicates will be ignored. The resulting ranks are meant to testing purposes only.";
+        for (const auto& [userId, games] : temporaryUserIds)
+        {
+            duplicateToPrimary[userId] = userId;
+        }
+    }
+    else
+    {
+        duplicateToPrimary = connection.duplicateToPrimaryMapping(temporaryUserIds);
+    }
+
+    // Not reset all user ids in the games to primary accounts.
+    for (auto it = games.begin(); it != games.end(); ++it)
+    {
+        for (uint32_t i = 0; i < it->second.playerCount(); i++)
+        {
+            if (!duplicateToPrimary.contains(it->second.userId(i)))
+            {
+                Log::error() << "Missing user id " << it->second.userId(i) << ".";
+            }
+            uint32_t primary = duplicateToPrimary[it->second.userId(i)];
+            finalUserIds.insert(primary);
+            it->second.setPlayer(i, primary);
+        }
+    }
+
+    // Finally, load all users.
+    connection.loadUsers(finalUserIds, players);
 
     // Run 1: Go through the games and set the correct user id for every game.
     //        Consider duplicates and only use the base account to have one
     //        elo value for each player, no matter how many account he has.
-    for (auto it = games.begin(); it != games.end(); ++it)
+    for (auto it = games.begin(); false && it != games.end(); ++it)
     {
         Game &game = it->second;
 
@@ -231,6 +244,7 @@ int main(int argc, char* argv[])
     uint32_t skippedByDuration = 0;
     uint32_t skippedByFPS = 0;
     uint32_t skippedInvalid = 0;
+    uint32_t skippedTestGames = 0;
 
     for (auto it = games.begin(); it != games.end(); ++it)
     {
@@ -303,8 +317,11 @@ int main(int argc, char* argv[])
             {
                 Log::info() << "Player '" << game.playerName(j) << "' is a test player. "
                             << "Game " << game.id() << " will be ignored.";
+                skippedTestGames++;
                 continue;
             }
+
+            players[game.userId(j)].increasePlayerNameUsage(game.playerName(j));
         }
 
         validGames.push_back(&game);
@@ -314,6 +331,7 @@ int main(int argc, char* argv[])
     Log::info() << "Skipped " << skippedByFPS << " games due to low fps.";
     Log::info() << "Skipped " << skippedByDuration << " games due to duration.";
     Log::info() << "Skipped " << skippedInvalid << " games due to unknown errors.";
+    Log::info() << "Skipped " << skippedTestGames << " games from test players.";
 
     // Sort the games by game end.
     std::sort(validGames.begin(), validGames.end(), [](const Game *a, const Game *b) {
