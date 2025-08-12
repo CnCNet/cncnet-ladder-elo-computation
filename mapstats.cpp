@@ -126,9 +126,6 @@ void MapStats::processGame(const Game &game, const Players &players)
             game.allParticipants([&](const Game::Participant& p) {
                 return p.hasWon || (!p.hasWon && (p.deviation < 120.0 || players[p.userId].wasActive())); }))
         {
-
-            Log::warning() << game << " ==> " << diff;
-
             std::vector<uint32_t> winnerIds = winners(game);
             std::vector<uint32_t> loserIds = losers(game);
             std::vector<factions::Faction> winnerFactions = winnersFactions(game);

@@ -230,7 +230,6 @@ void DatabaseConnection::loadUsers(const std::set<uint32_t> &userIds, Players &p
             {
                 player.setAlias(alias);
             }
-            std::cout << "USER: " << userId << " " << alias << std::endl;
             players.add(player, _ladder);
         }
     }

@@ -604,7 +604,14 @@ void Players::exportAllPlayers(
 
     for (auto it = _players.cbegin(); it != _players.cend(); ++it)
     {
-        filteredAndSortedPlayers.push_back(&(it->second));
+        if (it->second.gameCount() == 0)
+        {
+            Log::info() << "Ignoring player #" << it->second.userId() << " because no game has been played.";
+        }
+        else
+        {
+            filteredAndSortedPlayers.push_back(&(it->second));
+        }
     }
 
     // Now sort the players.
