@@ -62,91 +62,13 @@ bool DatabaseConnection::ladderExists(const std::string &abbreviation) const
 
 /*!
  */
-void DatabaseConnection::initDuplicates()
+void DatabaseConnection::removeDuplicate(std::map<uint32_t, std::set<uint32_t>> &duplicates, uint32_t userId)
 {
-    _duplicates.clear();
-
-    // Get all distinct user ids from table players. The users might have
-    // been deleted from the user-table.
-    {
-        std::unique_ptr<sql::PreparedStatement> statement(
-            _connection->prepareStatement("SELECT DISTINCT players.user_id "
-                                          "FROM players "
-                                          "JOIN ladders ON players.ladder_id = ladders.id "
-                                          "JOIN player_game_reports ON player_game_reports.player_id = players.id "
-                                          "WHERE ladders.abbreviation = ? "
-                                          "UNION "
-                                          "SELECT DISTINCT players.user_id "
-                                          "FROM players "
-                                          "JOIN ladders ON players.ladder_id = ladders.id "
-                                          "JOIN users ON players.user_id = users.id "
-                                          "WHERE ladders.abbreviation = ? "
-                                          "AND users.alias IS NOT NULL "
-                                          "AND users.alias != '' "
-            )
-        );
-        statement->setString(1, _ladder);
-        statement->setString(2, _ladder);
-        std::unique_ptr<sql::ResultSet> result(statement->executeQuery());
-
-        while (result->next())
-        {
-            _players.insert(result->getUInt("user_id"));
-        }
-    }
-
-    Log::info() << "Checking " << _players.size() << " users for duplicates.";
-
-    for (uint32_t uid : _players)
-    {
-        std::set<uint32_t> duplicates = getWebLikeDuplicateAccounts(uid);
-        for (uint32_t duplicate : duplicates)
-        {
-            _duplicates[uid].insert(duplicate);
-            _duplicates[duplicate].insert(uid);
-
-            for (uint32_t x : duplicates)
-            {
-                if (x != duplicate)
-                {
-                    _duplicates[duplicate].insert(x);
-                }
-            }
-        }
-    }
-}
-
-/*!
- */
-void DatabaseConnection::addDuplicates(uint32_t userId, std::set<uint32_t> duplicates)
-{
-    for (auto duplicate : duplicates)
-    {
-        _duplicates[userId].insert(duplicate);
-        _duplicates[duplicate].insert(userId);
-    }
-
-    for (auto duplicate : duplicates)
-    {
-        for (auto innerDuplicate : duplicates)
-        {
-            if (innerDuplicate != duplicate)
-            {
-                _duplicates[duplicate].insert(innerDuplicate);
-            }
-        }
-    }
-}
-
-/*!
- */
-void DatabaseConnection::removeDuplicate(uint32_t userId)
-{
-    _duplicates[userId].clear();
+    duplicates[userId].clear();
 
     Log::info() << "Removing duplicates for " << userId << ".";
 
-    for (auto it = _duplicates.begin(); it != _duplicates.end(); ++it)
+    for (auto it = duplicates.begin(); it != duplicates.end(); ++it)
     {
         std::set<uint32_t> &set = it->second;
         if (set.contains(userId))
@@ -159,139 +81,9 @@ void DatabaseConnection::removeDuplicate(uint32_t userId)
 
 /*!
  */
-std::set<uint32_t> DatabaseConnection::getDuplicates(uint32_t userId)
-{
-    return _duplicates[userId];
-}
-
-/*!
- */
-bool DatabaseConnection::knownUser(uint32_t userId) const
-{
-    return _players.contains(userId);
-}
-
-/*!
- */
 const std::string& DatabaseConnection::ladder() const
 {
     return _ladder;
-}
-
-/*!
- */
-std::set<uint32_t> DatabaseConnection::getDeepDuplicateAccounts(uint32_t startUserId)
-{
-    std::set<uint32_t> visited;
-    std::queue<uint32_t> queue;
-    queue.push(startUserId);
-
-    while (!queue.empty())
-    {
-        uint32_t currentId = queue.front();
-        queue.pop();
-
-        if (visited.contains(currentId))
-        {
-            continue;
-        }
-
-        visited.insert(currentId);
-
-        std::unique_ptr<sql::PreparedStatement> stmt1(
-            _connection->prepareStatement("SELECT ip_address_id FROM users WHERE id = ?")
-            );
-
-        stmt1->setUInt(1, currentId);
-        std::unique_ptr<sql::ResultSet> res1(stmt1->executeQuery());
-
-        int ipAddressId = -1;
-        if (res1->next())
-        {
-            ipAddressId = res1->getInt("ip_address_id");
-        }
-
-        // Find other user_ids with same IP.
-        std::set<uint32_t> ipRelated;
-        if (ipAddressId >= 0)
-        {
-            std::unique_ptr<sql::PreparedStatement> stmt2(
-                _connection->prepareStatement(
-                    "SELECT user_id FROM ip_address_histories "
-                    "WHERE ip_address_id = ? AND user_id != ?")
-                );
-            stmt2->setInt(1, ipAddressId);
-            stmt2->setUInt(2, currentId);
-            std::unique_ptr<sql::ResultSet> res2(stmt2->executeQuery());
-            while (res2->next())
-            {
-                ipRelated.insert(res2->getUInt("user_id"));
-            }
-        }
-
-        // Now find users with same qm_user_id.
-        std::set<uint32_t> qmRelated;
-        std::unique_ptr<sql::PreparedStatement> stmt3(
-            _connection->prepareStatement("SELECT qm_user_id FROM qm_user_ids WHERE user_id = ?")
-            );
-        stmt3->setUInt(1, currentId);
-        std::unique_ptr<sql::ResultSet> res3(stmt3->executeQuery());
-
-        // Now look for qm client ids.
-        std::vector<std::string> qmIds;
-        while (res3->next())
-        {
-            qmIds.push_back(res3->getString("qm_user_id"));
-        }
-
-        if (!qmIds.empty())
-        {
-            std::string inClause(qmIds.size() * 2 - 1, '?');
-            for (size_t i = 1; i < qmIds.size(); i++)
-            {
-                inClause[2 * i - 1] = ',';
-            }
-
-            std::string sql = "SELECT user_id FROM qm_user_ids WHERE qm_user_id IN (" + inClause + ") AND user_id != ?";
-            std::unique_ptr<sql::PreparedStatement> statement4(_connection->prepareStatement(sql));
-
-            int i = 1;
-
-            for (const auto& id : qmIds)
-            {
-                statement4->setString(i++, id);
-            }
-
-            statement4->setUInt(i, currentId);
-
-            std::unique_ptr<sql::ResultSet> result4(statement4->executeQuery());
-            while (result4->next())
-            {
-                qmRelated.insert(result4->getUInt("user_id"));
-            }
-        }
-
-        // Add all new ids to the queue, which are duplicated based on ip address.
-        for (uint32_t uid : ipRelated)
-        {
-            if (!visited.contains(uid))
-            {
-                queue.push(uid);
-            }
-        }
-
-        // Add all new ids to the queue, which are duplicated based on the qm client id.
-        for (uint32_t uid : qmRelated)
-        {
-            if (!visited.contains(uid))
-            {
-                queue.push(uid);
-            }
-        }
-
-    } // while (!queue.empty())
-
-    return visited;
 }
 
 /*!
@@ -387,199 +179,249 @@ uint32_t DatabaseConnection::loadPlayerFromAlias(const std::string &alias, Playe
 
 /*!
  */
-uint32_t DatabaseConnection::loadPlayer(
-    const std::string &name,
-    Players &players,
-    const std::string &ladderAbbreviation)
+void DatabaseConnection::loadUsers(const std::set<uint32_t> &userIds, Players &players)
 {
-    // Nicks for all ladders. Not used. Processing one ladder at once.
-    /*
-    std::unique_ptr<sql::PreparedStatement> statement(
-        connection->prepareStatement(
-            "SELECT players.user_id, users.alias, ladders.abbreviation, players.username "
-            "FROM players "
-            "JOIN ladders ON players.ladder_id = ladders.id "
-            "JOIN users ON users.id = players.user_id "
-            "WHERE players.user_id = ("
-            "  SELECT user_id FROM players p2 "
-            "  JOIN ladders l2 ON p2.ladder_id = l2.id "
-            "  WHERE p2.username = ? AND l2.abbreviation = ? "
-            "  LIMIT 1"
-            ") ORDER BY ladders.abbreviation"
-            )
-        );
-    */
+    if (userIds.empty())
+    {
+        Log::warning() << "No user ids provided.";
+        return;
+    }
 
-    std::unique_ptr<sql::PreparedStatement> statement(
-        _connection->prepareStatement(
-            "SELECT players.user_id, players.username, ladders.abbreviation, users.alias, users.name, users.primary_user_id "
-            "FROM players "
-            "JOIN ladders ON players.ladder_id = ladders.id "
-            "JOIN users ON players.user_id = users.id "
-            "WHERE players.user_id = ( "
-            "  SELECT user_id "
-            "  FROM players p2 "
-            "  JOIN ladders l2 ON p2.ladder_id = l2.id "
-            "  WHERE p2.username = ? AND l2.abbreviation = ? "
-            "  LIMIT 1 "
-            ") "
-            "AND ladders.abbreviation = ? "
-            "ORDER BY players.username; "
-        )
-    );
+    const size_t chunkSize = 500;
+    auto it = userIds.begin();
 
-    statement->setString(1, name);
-    statement->setString(2, !ladderAbbreviation.empty() ? ladderAbbreviation : _ladder);
-    statement->setString(3, !ladderAbbreviation.empty() ? ladderAbbreviation : _ladder);
+    while (it != userIds.end())
+    {
+        std::vector<uint32_t> chunk;
+        chunk.reserve(chunkSize);
+        std::stringstream query;
 
+        query << R"SQL(
+            SELECT
+                id,
+                alias
+            FROM users
+                WHERE id IN (
+        )SQL";
+
+        for (size_t i = 0; i < chunkSize && it != userIds.end(); ++i, ++it)
+        {
+            query << ((i > 0) ? "," : "");
+            query << "?";
+            chunk.push_back(*it);
+        }
+
+        query << ");";
+
+        std::unique_ptr<sql::PreparedStatement> stmt(_connection->prepareStatement(query.str()));
+        for (size_t i = 0; i < chunk.size(); i++)
+        {
+            stmt->setUInt(i + 1, chunk[i]);
+        }
+
+        std::unique_ptr<sql::ResultSet> result(stmt->executeQuery());
+
+        while (result->next())
+        {
+            uint32_t userId = result->getUInt("id");
+            std::string alias = result->getString("alias");
+            Player player(userId, userId, "", _gameMode);
+            if (!alias.empty())
+            {
+                player.setAlias(alias);
+            }
+            players.add(player, _ladder);
+        }
+    }
+}
+
+/*!
+ */
+std::string DatabaseConnection::loadAlias(uint32_t userId)
+{
+    std::string sql = "SELECT id, alias FROM users WHERE id = ?;";
+    std::unique_ptr<sql::PreparedStatement> statement(_connection->prepareStatement(sql));
+    statement->setUInt(1, userId);
     std::unique_ptr<sql::ResultSet> result(statement->executeQuery());
 
-    uint32_t userId = 0;
-    std::string alias;
-
-    std::optional<Player> player;
-
-    Log::debug() << "Got " << (result->rowsCount() - 1) << " other player names for player '" << name << "'";
-
     while (result->next())
     {
-        if (userId == 0)
+        std::string currentAlias = result->getString("alias");
+        if (!currentAlias.empty())
         {
-            userId = result->getInt("user_id");
-            uint32_t primaryUserId = result->getInt("primary_user_id");
-            player = Player(userId, primaryUserId, result->getString("name"), _gameMode);
+            return currentAlias;
         }
-        else if (userId != result->getInt("user_id") || player->account() != result->getString("name"))
-        {
-            Log::error() << "Found multiple users with qm name '" << name << '.';
-            continue;
-        }
-
-        if (alias.empty() && !result->getString("alias").asStdString().empty())
-        {
-            alias = result->getString("alias");
-            player->setAlias(alias);
-        }
-
-        // Do not give a warning if player name already existed if tournamend games were
-        // added and the player has an aliad
-        player->addName(result->getString("username"), result->getString("abbreviation"));
-
-        Log::info() << "User " << userId << " (" << result->getString("name") << ") has player name '" << result->getString("username") << "'.";
     }
 
-    if (player)
-    {
-        players.add(*player, !ladderAbbreviation.empty() ? ladderAbbreviation : _ladder);
-    }
-
-    return userId;
+    return std::string();
 }
 
 /*!
  */
-bool DatabaseConnection::loadPlayerWithNoUser(
-    uint32_t userId,
-    Players &players,
-    const std::string &ladderAbbreviation)
+std::unordered_map<uint32_t, uint32_t> DatabaseConnection::cncnetDuplicateMapping(const std::map<uint32_t, uint32_t> &userIds)
 {
-    std::unique_ptr<sql::PreparedStatement> stmt(
-        _connection->prepareStatement(
-            "SELECT players.user_id, players.username, ladders.abbreviation, users.alias, users.primary_user_id "
-            "FROM players "
-            "JOIN ladders ON players.ladder_id = ladders.id "
-            "JOIN users ON players.user_id = users.id "
-            "WHERE players.user_id = ? "
-            // "AND ladders.abbreviation = ? " <= User might not have played the current ladder.
-            "ORDER BY players.username;"
-            )
-        );
+    std::unordered_map<uint32_t, uint32_t> result;
+    std::map<uint32_t, std::set<uint32_t>> temporaryDuplicates;
 
-    stmt->setUInt(1, userId);
-    // stmt->setString(2, _ladder);
-
-    std::unique_ptr<sql::ResultSet> result(stmt->executeQuery());
-
-    std::optional<Player> player;
-
-    while (result->next())
+    // First, use recent-IP algorithm to determine duplicates.
+    for (const auto& [userId, gameCount] : userIds)
     {
-        if (!player.has_value())
+        Log::verbose() << "User " << userId << " has played " << gameCount << " games.";
+        temporaryDuplicates[userId] = std::set<uint32_t>();
+        std::set<uint32_t> duplicates = getWebLikeDuplicateAccounts(userId);
+        for (uint32_t duplicate : duplicates)
         {
-            uint32_t primaryUserId = result->getInt("primary_user_id");
-            player = Player(userId, primaryUserId, "", _gameMode);
+            Log::verbose() << "User #" << duplicate << " is a duplicate of #" << userId << ".";
+            temporaryDuplicates[userId].insert(duplicate);
+            temporaryDuplicates[duplicate].insert(userId);
 
-            std::string alias = result->getString("alias");
+            for (uint32_t x : duplicates)
+            {
+                if (x != duplicate)
+                {
+                    temporaryDuplicates[duplicate].insert(x);
+                }
+            }
+        }
+    }
+
+    // Next, add some well known duplicates, which are not detected by recent IP.
+    temporaryDuplicates[  152].insert({ 37747, 79486 });
+    temporaryDuplicates[  268].insert({    69 });
+    temporaryDuplicates[ 3968].insert({ 18319, 66877 });
+    temporaryDuplicates[17651].insert({ 40343, 43364, 44568 }); // This is actually wrong.
+    temporaryDuplicates[19083].insert({ 10459 });
+    temporaryDuplicates[33933].insert({ 300, 5878 });
+    temporaryDuplicates[40500].insert({    24,  1029, 68169 });
+    temporaryDuplicates[44616].insert({ 67416 });
+    temporaryDuplicates[37077].insert({ 58873, 59236, 59916, 68898, 68942, 71304 });
+    temporaryDuplicates[19548].insert({ 68698 });
+    temporaryDuplicates[69904].insert({ 73057, 75285, 78280});
+    temporaryDuplicates[47880].insert({ 71623 });
+    temporaryDuplicates[53313].insert({ 59298, 76620 });
+    temporaryDuplicates[54423].insert({ 20498 });
+    temporaryDuplicates[55626].insert({ 73649 });
+    temporaryDuplicates[58766].insert({ 58764, 66502 });
+    temporaryDuplicates[59413].insert({   554, 61680 });
+    temporaryDuplicates[60300].insert({ 61757, 65104, 65875 });
+    temporaryDuplicates[62077].insert({ 56736 });
+    temporaryDuplicates[63398].insert({ 63331 });
+    temporaryDuplicates[67132].insert({ 1179 });
+    temporaryDuplicates[67596].insert({ 36814 });
+    temporaryDuplicates[60828].insert({ 77657, 74819});
+    temporaryDuplicates[65311].insert({ 81488 });
+    removeDuplicate(temporaryDuplicates, 56589);
+    removeDuplicate(temporaryDuplicates, 6026);
+    removeDuplicate(temporaryDuplicates, 58860);
+
+    crunchDuplicates(temporaryDuplicates);
+
+    // Ouput all duplicates.
+    for (auto& [primaryUserId, duplicates] : temporaryDuplicates)
+    {
+        std::stringstream ss;
+        for (uint32_t id : duplicates)
+        {
+            ss << " " << id;
+        }
+        Log::verbose() << "Duplicates of #" << primaryUserId << ":" << ss.str();
+    }
+
+    // Next, find the best primary account for each player.
+    for (auto& [currentPrimary, duplicates] : temporaryDuplicates)
+    {
+        uint32_t currentBestPrimary = 0;
+        uint32_t mostGames = 0;
+        duplicates.insert(currentPrimary);
+
+        for (uint32_t duplicate : duplicates)
+        {
+            std::string alias = loadAlias(duplicate);
             if (!alias.empty())
             {
-                player->setAlias(alias);
+                currentBestPrimary = duplicate;
+                break;
+            }
+
+            auto it = userIds.find(duplicate);
+            uint32_t gamesPlayed = (it == userIds.end()) ? 0 : it->second;
+
+            if (gamesPlayed > mostGames)
+            {
+                mostGames = it->second;
+                currentBestPrimary = duplicate;
             }
         }
 
-        player->addName(result->getString("username"), result->getString("abbreviation"));
+        if (currentBestPrimary == 0)
+        {
+            Log::critical() << "No best primary account found.";
+        }
+
+        for (uint32_t duplicate : duplicates)
+        {
+            result[duplicate] = currentBestPrimary;
+        }
     }
 
-    if (player)
-    {
-        players.add(*player, !ladderAbbreviation.empty() ? ladderAbbreviation : _ladder);
-        return true;
-    }
-
-    return false;
+    return result;
 }
+
 /*!
  */
-bool DatabaseConnection::loadPlayer(
-    uint32_t userId,
-    Players &players,
-    const std::string &ladderAbbreviation)
+std::unordered_map<uint32_t, uint32_t> DatabaseConnection::duplicateToPrimaryMapping(const std::map<uint32_t, uint32_t> userIds)
 {
-    std::unique_ptr<sql::PreparedStatement> stmt(
-        _connection->prepareStatement(
-            "SELECT players.user_id, players.username, ladders.abbreviation, users.alias, users.name, users.primary_user_id "
-            "FROM players "
-            "JOIN ladders ON players.ladder_id = ladders.id "
-            "JOIN users ON players.user_id = users.id "
-            "WHERE players.user_id = ? "
-            "AND ladders.abbreviation = ? "
-            "ORDER BY players.username;"
-            )
-        );
+    std::unordered_map<uint32_t, uint32_t> result;
 
-    stmt->setUInt(1, userId);
-    stmt->setString(2, !ladderAbbreviation.empty() ? ladderAbbreviation : _ladder);
-
-    std::unique_ptr<sql::ResultSet> result(stmt->executeQuery());
-
-    std::optional<Player> player;
-
-    while (result->next())
+    if (userIds.empty())
     {
-        if (!player.has_value())
-        {
-            std::string accountName = result->getString("name");
-            uint32_t primaryUserId = result->getInt("primary_user_id");
-            player = Player(userId, primaryUserId, accountName, _gameMode);
+        Log::error() << "No user ids for duplicate mapping.";
+        return result;
+    }
 
-            std::string alias = result->getString("alias");
-            if (!alias.empty())
+    const size_t chunkSize = 500;
+    auto it = userIds.begin();
+    while (it != userIds.end())
+    {
+        std::ostringstream query;
+        query << R"sql(
+            SELECT
+                id,
+                primary_user_id
+            FROM users
+            WHERE id IN (
+        )sql";
+
+        for (size_t i = 0; i < chunkSize && it != userIds.end(); ++i, ++it)
+        {
+            if (i > 0)
             {
-                player->setAlias(alias);
+                query << ",";
+            }
+            query << it->first;
+        }
+        query << ");";
+
+        std::unique_ptr<sql::PreparedStatement> stmt(_connection->prepareStatement(query.str()));
+        stmt->execute();
+        std::unique_ptr<sql::ResultSet> queryResult(stmt->executeQuery());
+
+        while (queryResult->next())
+        {
+            uint32_t userId = queryResult->getUInt("id");
+            uint32_t primaryId = queryResult->getUInt("primary_user_id");
+            if (primaryId != 0 && primaryId != userId)
+            {
+                result[userId] = primaryId;
+            }
+            else
+            {
+                result[userId] = userId;
             }
         }
-
-        player->addName(result->getString("username"), result->getString("abbreviation"));
     }
 
-    if (player)
-    {
-        players.add(*player, !ladderAbbreviation.empty() ? ladderAbbreviation : _ladder);
-        Log::debug() << "Loaded player " << userId << ".";
-        return true;
-    }
-
-    Log::debug() << "Unable to load player " << userId << " from table 'users'.";
-    return false;
+    return result;
 }
 
 /*!
@@ -800,67 +642,6 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
 
 /*!
  */
-uint32_t DatabaseConnection::getBaseAccount(const std::set<uint32_t>& userIds, const std::set<uint32_t>& invalidUserIds)
-{
-    assert (!userIds.empty());
-    uint32_t id = 0;
-    std::string alias;
-
-    std::string inClause(userIds.size() * 2 - 1, '?');
-    for (size_t i = 1; i < userIds.size(); ++i)
-    {
-        inClause[2 * i - 1] = ',';
-    }
-
-    std::string sql = "SELECT id, alias FROM users WHERE id IN (" + inClause + ")";
-    std::unique_ptr<sql::PreparedStatement> statement(_connection->prepareStatement(sql));
-
-    int i = 1;
-    for (uint32_t id : userIds)
-    {
-        statement->setUInt(i++, id);
-    }
-
-    std::unique_ptr<sql::ResultSet> result(statement->executeQuery());
-
-    while (result->next())
-    {
-        std::string currentAlias = result->getString("alias");
-        if (!currentAlias.empty())
-        {
-            if (!alias.empty())
-            {
-                Log::warning() << "User " << id << " with alias '" << alias << "' is a duplicate of user "
-                             << result->getUInt("id") << " with alias '" << currentAlias << "'. Only one "
-                             << "account is supposed to have an alias.";
-            }
-            else
-            {
-                id = result->getUInt("id");
-                alias = currentAlias;
-            }
-        }
-    }
-
-    if (id != 0)
-    {
-        return id;
-    }
-
-    for (uint32_t userId : userIds)
-    {
-        if (!invalidUserIds.contains(userId))
-        {
-            return userId;
-        }
-    }
-
-    Log::fatal() << "No base account found among user ids " << userIds << ".";
-    throw std::runtime_error("No base account. Cannot continue;");
-}
-
-/*!
- */
 void DatabaseConnection::writePlayerRatings(
     gamemodes::GameMode gameMode,
     const Players &players,
@@ -979,4 +760,58 @@ void DatabaseConnection::writePlayerRatings(
     {
         Log::fatal() << "Error while writing user ratings: " << e.what();
     }
+}
+
+/*!
+ */
+void DatabaseConnection::crunchDuplicates(std::map<uint32_t, std::set<uint32_t>> &duplicates)
+{
+    // Unbalanced graph.
+    std::map<uint32_t, std::set<uint32_t>> adj;
+    for (const auto &kv : duplicates)
+    {
+        uint32_t k = kv.first;
+        adj[k];
+        for (uint32_t v : kv.second)
+        {
+            adj[k].insert(v);
+            adj[v].insert(k);
+        }
+    }
+
+    std::set<uint32_t> visited;
+    std::map<uint32_t, std::set<uint32_t>> result;
+
+    for (const auto &node : adj)
+    {
+        uint32_t start = node.first;
+        if (visited.count(start)) continue;
+
+        std::vector<uint32_t> stack = { start };
+        std::set<uint32_t> component;
+
+        while (!stack.empty())
+        {
+            uint32_t u = stack.back();
+            stack.pop_back();
+            if (visited.insert(u).second)
+            {
+                component.insert(u);
+                for (uint32_t w : adj[u])
+                {
+                    if (!visited.count(w)) stack.push_back(w);
+                }
+            }
+        }
+
+        if (!component.empty())
+        {
+            uint32_t rep = *component.begin();
+            std::set<uint32_t> others = component;
+            others.erase(rep);
+            result[rep] = std::move(others);
+        }
+    }
+
+    duplicates = result;
 }

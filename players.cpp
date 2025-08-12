@@ -59,34 +59,40 @@ std::vector<uint32_t> Players::userIds() const
 
 /*!
  */
-Player& Players::operator[](uint32_t index)
+Player &Players::operator [](uint32_t index)
 {
     if (index == 0)
     {
         Log::error() << "Player with user id 0 is not supposed to exist.";
     }
 
-    if (!_players.contains(index))
+    auto it = _players.find(index);
+    if (it == _players.end())
     {
         Log::fatal() << "No player for index " << index << ".";
         throw std::runtime_error("Accessing non-existing player.");
     }
 
-    return _players[index];
+    return it->second;
 }
 
 /*!
  */
-Player Players::operator[](uint32_t index) const
+const Player& Players::operator[](uint32_t index) const
 {
     if (index == 0)
     {
         Log::error() << "Player with user id 0 is not supposed to exist.";
     }
 
-    Log::fatal(!_players.contains(index)) << "No player for index " << index << ". An exception will be thrown.";
+    auto it = _players.find(index);
+    if (it == _players.end())
+    {
+        Log::fatal() << "No player for index " << index << ". An exception will be thrown.";
+        throw std::runtime_error("Accessing non-existing player.");
+    }
 
-    return _players.at(index);
+    return it->second;
 }
 
 /*!
@@ -113,43 +119,10 @@ void Players::add(const Player &player, const std::string &ladderAbbreviation)
 
 /*!
  */
-void Players::markDuplicates(uint32_t id, const std::set<uint32_t> &duplicates)
-{
-    for (auto it = _nickToUserId.begin(); it != _nickToUserId.end(); ++it)
-    {
-        std::map<std::string, uint32_t> &innerMap = it->second;
-
-        for (auto innerIt = innerMap.begin(); innerIt != innerMap.end(); ++innerIt)
-        {
-            if (duplicates.contains(innerIt->second))
-            {
-                innerIt->second = id;
-            }
-        }
-    }
-}
-
-/*!
- */
 bool Players::isTestAccount(uint32_t userId) const
 {
     return _testAccounts.contains(userId);
 }
-
-/*!
- */
-uint32_t Players::userId(const std::string &playerName, const std::string &ladderName) const
-{
-    auto innerIt = _nickToUserId.find(ladderName);
-    if (innerIt == _nickToUserId.end())
-    {
-        return 0;
-    }
-
-    auto it = _nickToUserId.at(ladderName).find(playerName);
-    return (it != _nickToUserId.at(ladderName).end()) ? it->second : 0;
-}
-
 
 /*!
  */
@@ -174,7 +147,7 @@ bool Players::hasPendingGames() const
 {
     bool hasPendingGames = false;
 
-    for (std::map<uint32_t, Player>::const_iterator it = _players.begin(); it != _players.end() && !hasPendingGames; ++it)
+    for (std::unordered_map<uint32_t, Player>::const_iterator it = _players.begin(); it != _players.end() && !hasPendingGames; ++it)
     {
         hasPendingGames |= (it->second.pendingGameCount() > 0);
     }
@@ -186,7 +159,7 @@ bool Players::hasPendingGames() const
  */
 void Players::apply(std::chrono::year_month_day date, bool decay, gamemodes::GameMode gameMode)
 {
-    for (std::map<uint32_t, Player>::iterator it = _players.begin(); it != _players.end(); ++it)
+    for (std::unordered_map<uint32_t, Player>::iterator it = _players.begin(); it != _players.end(); ++it)
     {
         Player &player = it->second;
         player.apply(date, decay, gameMode);
@@ -203,7 +176,7 @@ uint32_t Players::activePlayerCount() const
 {
     uint32_t result = 0;
 
-    for (std::map<uint32_t, Player>::const_iterator it = _players.begin(); it != _players.end(); ++it)
+    for (std::unordered_map<uint32_t, Player>::const_iterator it = _players.begin(); it != _players.end(); ++it)
     {
         result += it->second.isActive() ? 1 : 0;
     }
@@ -631,7 +604,14 @@ void Players::exportAllPlayers(
 
     for (auto it = _players.cbegin(); it != _players.cend(); ++it)
     {
-        filteredAndSortedPlayers.push_back(&(it->second));
+        if (it->second.gameCount() == 0)
+        {
+            Log::info() << "Ignoring player #" << it->second.userId() << " because no game has been played.";
+        }
+        else
+        {
+            filteredAndSortedPlayers.push_back(&(it->second));
+        }
     }
 
     // Now sort the players.
@@ -754,7 +734,7 @@ void Players::exportNewPlayers(const std::filesystem::path &directory, gamemodes
  */
 void Players::finalize()
 {
-    for (std::map<uint32_t, Player>::iterator it = _players.begin(); it != _players.end(); ++it)
+    for (std::unordered_map<uint32_t, Player>::iterator it = _players.begin(); it != _players.end(); ++it)
     {
         it->second.finalize();
     }
