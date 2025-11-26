@@ -6,10 +6,10 @@
 namespace gamemodes
 {
 
-std::vector<std::string> __names = { "RA2 Blitz", "Yuris Revenge", "Red Alert 2", "Red Alert", "Red Alert 2 New Maps", "Blitz 2v2", "Unknown" };
+std::vector<std::string> __names = { "RA2 Blitz", "Yuris Revenge", "Red Alert 2", "Red Alert", "Red Alert 2 New Maps", "Blitz 2v2", "Red Alert 2 2v2", "Unknown" };
 
 // These names need to match column 'abbreviation' from table 'ladders'.
-std::vector<std::string> __shortNames = { "blitz", "yr", "ra2", "ra", "ra2-new-maps", "blitz-2v2", "?" };
+std::vector<std::string> __shortNames = { "blitz", "yr", "ra2", "ra", "ra2-new-maps", "blitz-2v2", "ra2-2v2", "?" };
 
 /*!
  */
@@ -84,6 +84,7 @@ uint32_t playerCount(GameMode gameMode)
     case RedAlert2NewMaps:
         return 2;
     case Blitz2v2:
+    case RedAlert2_2v2:
         return 4;
     case Unknown:
         return 0;

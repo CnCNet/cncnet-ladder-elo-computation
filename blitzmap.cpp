@@ -10,29 +10,31 @@
 #include "logging.h"
 #include "stringtools.h"
 
-std::array<std::string, 45> blitzmap::__names = {
+std::array<std::string, blitzmap::MapCount> blitzmap::__names = {
     "Alamo", "Kong", "Big Little Lake", "Castle", "Oasis", "Doom", "Yin Yang", "Brute", "Mummy", "Surge",
     "Prime", "Demo", "Spark", "Carnival", "Bongo", "Boom", "Texas", "Volley", "River Riot", "Toothpick",
     "Tundra", "King's Hill", "Dry Heat", "Pirate Bay", "Breaking Bad", "Skyrim Shot", "Quick Sand", "Paika BLITZ",
     "The Doofus Omnibus", "The Burg", "Downhill Rush", "Cloud Nine", "LgndFan", "Dune II", "Momento",
-    "Revenant", "Chimp Frenzy", "Equinox", "RIP Jaws", "The Path More Traveled", "Jeen Strike", "Thunder Dome", "Caladan"
+    "Revenant", "Chimp Frenzy", "Equinox", "RIP Jaws", "The Path More Traveled", "Jeen Strike", "Thunder Dome",
+    "Caladan", "Campgrounds", "Night Shade"
 };
 
-std::array<std::string, 45> blitzmap::__shortNames = {
+std::array<std::string, blitzmap::MapCount> blitzmap::__shortNames = {
     "alamo", "kong", "lake", "castle", "oasis", "doom", "yinyang", "brute", "mummy", "surge",
     "prime", "demo", "spark", "carnival", "bongo", "boom", "texas", "volley", "river riot", "toothpick",
     "tundra", "kingshill", "dryheat", "piratebay", "breaking bad", "skyrim shot", "quick sand", "paika",
     "omnibus", "theburg", "downhillrush", "cloudnine", "lgndfan", "dune2", "momento", "revenant",
-    "chimpfrenzy", "equinox", "ripjaws", "pathtraveled", "jeenstrike", "thunderdome", "caladan"
+    "chimpfrenzy", "equinox", "ripjaws", "pathtraveled", "jeenstrike", "thunderdome", "caladan",
+    "campgrounds", "night shade"
 };
 
-std::array<blitzmap::MapSize, 45> blitzmap::__mapSizes = {
+std::array<blitzmap::MapSize, blitzmap::MapCount> blitzmap::__mapSizes = {
     Small, Small, Small, Small, Small, Small, Small, Small,
     Small, Small, Small, Small, Small, Large, Medium, Medium,
     Medium, Large, Large, Medium, Large, Medium, Medium, Medium,
     Medium, Medium, Small, Small, Medium, Medium, Large, Small,
     Small, Medium, Medium, Large, Small, Large, Large, Large, Small,
-    Medium, Medium
+    Medium, Medium, Small, Small
 };
 
 /*!

@@ -320,3 +320,11 @@ If you want to climb, you’ll need to prove your skill against a variety of act
 ### 1.0.4
 
 - Uses confirmed duplicates from CnCNet by default, can still use old algorithm to detect duplicates or ignore duplicates at all
+
+### 1.0.5
+
+- Performance improvements (bundling SQL queries & C++ optimizations)
+
+### 1.0.06
+
+- Added support for RA2 2v2 game mode

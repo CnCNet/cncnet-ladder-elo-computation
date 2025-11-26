@@ -20,8 +20,8 @@ enum GameMode
     RedAlert = 3,
     RedAlert2NewMaps = 4,
     Blitz2v2 = 5,
-
-    GameModeCount = 6,
+    RedAlert2_2v2 = 6,
+    GameModeCount = 7,
     Unknown = 99
 };
 

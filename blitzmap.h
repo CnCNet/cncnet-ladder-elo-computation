@@ -14,9 +14,11 @@ enum MapSize
     Large = 2
 };
 
-extern std::array<std::string, 45> __names;
-extern std::array<std::string, 45> __shortNames;
-extern std::array<MapSize, 45> __mapSizes;
+inline constexpr int MapCount = 47;
+
+extern std::array<std::string, MapCount> __names;
+extern std::array<std::string, MapCount> __shortNames;
+extern std::array<MapSize, MapCount> __mapSizes;
 
 //! Get the index to a map name. Return -1 if map could not be found.
 int toIndex(const std::string &name);
