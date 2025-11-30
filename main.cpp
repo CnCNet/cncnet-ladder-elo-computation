@@ -150,6 +150,13 @@ int main(int argc, char* argv[])
             continue;
         }
 
+        // Fix high fps values.
+        if (type == gametypes::Quickmatch && duration > 0 && fps > 0)
+        {
+            double factor = static_cast<double>(fps) / 60.0;
+            duration = static_cast<double>(duration) * factor;
+        }
+
         // Ignore games with less than 35 seconds.
         if (type == gametypes::Quickmatch && duration != 0 && duration < 35)
         {
@@ -264,10 +271,21 @@ int main(int argc, char* argv[])
         {
             Log::info() << "Apply update for " << stringtools::fromDate(previousGameDate);
             players.update();
+
             // In contrast to the local ELO list, the result are for the current day, which means that
             // your peak rating is set to the day where you achieved it and not they day after, when it's visible
             // for the first time.
             players.apply(previousGameDate, true, options.gameMode);
+
+            // Apply a decay if the number of days without a game is greater than 3.
+            // This is probably not a technical issue anymore, but players losing interest.
+            int64_t dayDifference = (gameDate - previousGameDate).count();
+            if (dayDifference > 3)
+            {
+                Log::info() << (dayDifference - 3) << " days since last game. Applying decay for " << (dayDifference - 3) << " days.";
+                players.decay(dayDifference - 3, options.gameMode);
+            }
+
             previousGameDate = gameDate;
         }
 

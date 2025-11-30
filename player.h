@@ -243,6 +243,13 @@ public:
     //! Check lexical order. Considers brackets.
     bool lowerLexicalOrder(const Player &other) const;
 
+    //! Decay the players rating.
+    void decay(int days, gamemodes::GameMode gameMode);
+
+    //! Get the number of days this player is currently active with the
+    //! given faction.
+    int daysSinceLastTimeGoingActive(factions::Faction faction) const;
+
 private:
     //! User id. 0 if invalid player.
     uint32_t _userId = 0;
@@ -341,6 +348,9 @@ private:
 
     //! List of player names for each ladder.
     std::map<std::string, std::set<std::string>> _names;
+
+    //! Number of games played at the last point of going active.
+    std::array<uint32_t, factions::count()> _gamesAtActivation;
 
 }; // class Player
 

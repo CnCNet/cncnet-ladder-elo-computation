@@ -131,6 +131,27 @@ double deviationThresholdActive(GameMode gameMode, double currentElo)
 
 /*!
  */
+double deviationThresholdPeak(GameMode gameMode)
+{
+    return deviationThresholdActive(gameMode, glicko::initialRating) * 1.0;
+}
+
+/*!
+ */
+uint32_t minGamesSinceActivationForPeak(GameMode gameMode)
+{
+    if (gameMode == GameMode::RedAlert2_2v2 || gameMode == GameMode::Blitz2v2)
+    {
+        return 80;
+    }
+    else
+    {
+        return 50;
+    }
+}
+
+/*!
+ */
 double deviationThresholdInactive(GameMode gameMode, double currentElo)
 {
     if (gameMode == GameMode::YurisRevenge)

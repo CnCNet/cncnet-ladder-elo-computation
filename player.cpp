@@ -376,6 +376,19 @@ void Player::update()
 
 /*!
  */
+void Player::decay(int days, gamemodes::GameMode gameMode)
+{
+    for (size_t i = 0; i < _ratings.size(); i++)
+    {
+        for (int j = 0; j < days; j++)
+        {
+            _ratings[i].decay(this->wasActive(), gamemodes::decayFactor(gameMode), gamemodes::maxDeviationAfterActive(gameMode));
+        }
+    }
+}
+
+/*!
+ */
 void Player::apply(std::chrono::year_month_day date, bool decay, gamemodes::GameMode gameMode)
 {
      _yesterdaysRatings = _ratings;
@@ -424,6 +437,7 @@ void Player::apply(std::chrono::year_month_day date, bool decay, gamemodes::Game
 
             // Congratulations! This faction has just gone active.
             _factionStatusList[i].push_back(date);
+            _gamesAtActivation[faction] = this->gameCount();
             Log::debug() << date << " => " << alias()<< " goes active after " << _gameCount[i] << " games for faction '" << factions::name(faction) << "'.";
         }
         else if (deviation(faction) > gamemodes::deviationThresholdInactive(gameMode, elo(faction)) && isActive(faction))
@@ -440,7 +454,9 @@ void Player::apply(std::chrono::year_month_day date, bool decay, gamemodes::Game
             }
         }
 
-        if (isActive(faction) && (elo(faction) - this->deviation(faction)) > _peakRatings[faction].adjustedElo)
+        if (daysSinceLastTimeGoingActive(faction) > 2 &&  this->deviation(faction) < gamemodes::deviationThresholdPeak(gameMode)
+            && isActive(faction) && (elo(faction) - this->deviation(faction)) > _peakRatings[faction].adjustedElo
+            && (this->gameCount() - _gamesAtActivation[faction]) >= gamemodes::minGamesSinceActivationForPeak(gameMode))
         {
             // New peak rating.
             _peakRatings[faction].date = date;
@@ -1020,5 +1036,26 @@ const Rating& Player::rating(factions::Faction faction) const
 const std::map<std::string, std::set<std::string>>& Player::names() const
 {
     return _names;
+}
+
+/*!
+ */
+int Player::daysSinceLastTimeGoingActive(factions::Faction faction) const
+{
+    const std::vector<std::chrono::year_month_day> &list = _factionStatusList[faction];
+
+    // Make sure this faction is active.
+    if ((list.size() % 2) == 0)
+    {
+        return -1;
+    }
+
+    auto today = floor<std::chrono::days>(std::chrono::system_clock::now());
+    std::chrono::year_month_day currentDate{today};
+    std::chrono::sys_days currentDays = currentDate;
+
+    std::chrono::sys_days lastActivation = list.back();
+    std::chrono::days diff = currentDays - lastActivation;
+    return diff.count();
 }
 
