@@ -61,6 +61,9 @@ public:
     //! Apply pending games to all players.
     void apply(std::chrono::year_month_day date, bool decay, gamemodes::GameMode gameMode);
 
+    //! Decay all players ratings.
+    void decay(int days, gamemodes::GameMode gameMode);
+
     // Exporting methods for actual rankings.
 public:
     //! Export list of active players, sorted by rating. The is the actual ELO list.

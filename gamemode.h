@@ -58,4 +58,11 @@ double deviationThresholdInactive(GameMode gameMode, double elo);
 //! Maximum deviation you can get after having been active is game-dependent.
 double maxDeviationAfterActive(GameMode gameMode);
 
+//! Maximum deviation for a peak rating.
+double deviationThresholdPeak(GameMode gameMode);
+
+//! The minimum number of games you need to play after activation in order for your peak
+//! rating to count.
+uint32_t minGamesSinceActivationForPeak(GameMode gameMode);
+
 } // namespace gamemodes

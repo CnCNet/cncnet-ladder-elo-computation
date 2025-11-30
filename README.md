@@ -325,6 +325,11 @@ If you want to climb, you’ll need to prove your skill against a variety of act
 
 - Performance improvements (bundling SQL queries & C++ optimizations)
 
-### 1.0.06
+### 1.0.6
 
 - Added support for RA2 2v2 game mode
+
+### 1.0.7
+
+- Added workaround for games with wrong duration/fps values
+- Highered the bar to get a peak rating for the all time best list

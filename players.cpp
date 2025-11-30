@@ -172,6 +172,17 @@ void Players::apply(std::chrono::year_month_day date, bool decay, gamemodes::Gam
 
 /*!
  */
+void Players::decay(int days, gamemodes::GameMode gameMode)
+{
+    for (std::unordered_map<uint32_t, Player>::iterator it = _players.begin(); it != _players.end(); ++it)
+    {
+        Player &player = it->second;
+        player.decay(days, gameMode);
+    }
+}
+
+/*!
+ */
 uint32_t Players::activePlayerCount() const
 {
     uint32_t result = 0;
