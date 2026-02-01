@@ -121,7 +121,7 @@ int blitzmap::toIndex(const std::string &name)
     }
 
     std::string lowerCase = stringtools::toLower(standardCase);
-    std::cout << "name: >" << lowerCase << "<" << std::endl;
+
     for (size_t i = 0; i < blitzmap::__names.size(); ++i)
     {
         if (blitzmap::__names[i].rfind(standardCase, 0) == 0 || blitzmap::__names[i].rfind(lowerCase, 0) == 0)
