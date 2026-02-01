@@ -14,7 +14,7 @@ enum MapSize
     Large = 2
 };
 
-inline constexpr int MapCount = 47;
+inline constexpr int MapCount = 48;
 
 extern std::array<std::string, MapCount> __names;
 extern std::array<std::string, MapCount> __shortNames;

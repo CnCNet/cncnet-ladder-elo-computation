@@ -439,7 +439,7 @@ std::map<uint32_t, Game> DatabaseConnection::fetchGames()
             player_game_reports.won AS playerWon,
             player_game_reports.points,
             sides.name AS playerCountry,
-            COALESCE(maps.name, games.scen) AS map,
+            COALESCE(maps.name, games.scen, games.hash) AS map,
             game_reports.duration,
             game_reports.fps,
             UNIX_TIMESTAMP(games.created_at) AS timestamp,

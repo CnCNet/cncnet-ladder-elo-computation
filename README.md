@@ -171,8 +171,8 @@ You can provide the environment variables `MYSQL_HOST`, `MYSQL_PASSWORD`, `MYSQL
 
   * `-H` or `--host`: MySql host name, will be preferred over environment variable MYSQL_HOST
   * `-u` or `--user`: MySql user, will be preferred over environment variable MYSQL_USER
-  * `-P` or `--password`: MySql password, will be preferred over environment variable MYSQL_PASSWORD
-  * `-p` or `--port`: MySql port, will be preferred over environment variable MYSQL_PORT
+  * `-p` or `--password`: MySql password, will be preferred over environment variable MYSQL_PASSWORD
+  * `-P` or `--port`: MySql port, will be preferred over environment variable MYSQL_PORT
   * `-m` or `--gamemode`: blitz, blitz-2v2, ra2, ra and yr are tested, other might work too. ra2 will include ra2-new-maps
   * `-o` or `--output-dir`: Location where all JSON files are written. Needs to align with the directory provided with the docker container
   * `-l` or `--log-level`: Defaults to verbose, but if files get too large, info or warning might be the better choice.
@@ -333,3 +333,9 @@ If you want to climb, you’ll need to prove your skill against a variety of act
 
 - Added workaround for games with wrong duration/fps values
 - Highered the bar to get a peak rating for the all time best list
+
+### 1.0.8
+
+- Adjusted thresholds for activity/inactivity
+- Added hashed to resolve missing map names for Blitz
+- Swich to mixed faction elos for RA2 2v2
