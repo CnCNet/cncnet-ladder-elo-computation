@@ -80,11 +80,27 @@ int blitzmap::toIndex(const std::string &name)
         { "308592a1f20251165a22c6162d433876fdefffcb", "?????" },
         { "3c18e314c5407a07f251a5dd349cdeef5e72bd91", "?????" },
         { "92f86a63cf441282e6558f005da4881385a6e350", "?????" },
-        { "efe62be9f0862a1998f591a01aff1d65771ea463", "?????" },
+        { "efe62be9f0862a1998f591a01aff1d65771ea463", "2v2map" },
         { "7cd3ce633489f876ef1b63503b7974c7ece3228b", "?????" },
         { "11fdb0e5e1b11288b4a7226ea2c0d14c15a1b813", "?????" },
         { "2a0adb389319af86642b2758a798df40556cc609", "?????" },
-        { "14914cccaac6184e55b3e789a0efbb391d96541c", "?????" }
+        { "14914cccaac6184e55b3e789a0efbb391d96541c", "?????" },
+
+        { "c02ca0e553c587b631ebf697db4117b124062b78", "Surge" },
+        { "c4deeba888fadf17337f03a9e221de20f96a3223", "Dry Heat" },
+        { "e22e7b8977445ba2e66fe04b7a94a97f5dbc7306", "The Path More Traveled" },
+        { "e77fa042e6349968756fc2717503b426c5c599eb", "Mummy" },
+        { "ec19076128a19fa0459ae44c60315e69bb632c68", "Skyrim Shot" },
+        { "f235a82af2bc200867dfb17390fae4bfc595ebb9", "Castle" },
+        { "f8ebe583b8ef732fe1bf885638be3b1565809805", "Texas" },
+        { "633a129885581693909c9a12a229eadf7098fdd8", "Quick Sand" },
+        { "4348afca19d7083052a3ee0218277c489d612862", "Spark" },
+        { "3e0f7c6a074265e637b26bb1941fb3e4671f1eda", "Paradropia", },
+        { "493c95551423b5ccf24efd27adbe52db0e37d6a5", "Bongo" },
+        { "52ac9372b5ff2a0ab925d25d88714825b0bf6e1b", "Doofus Omnibus" },
+        { "7a2549e04fbd58966522fcf9012d08ed378cad61", "Jeen Strike" },
+        { "2695e07a8aaa04ca4a8ecb30f71a1c1b05103f01", "Cloud Nine" }
+
     };
 
     if (hashes.find(trimmedName) != hashes.end())
