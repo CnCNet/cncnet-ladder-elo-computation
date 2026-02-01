@@ -126,7 +126,14 @@ double maxDeviationAfterActive(GameMode gameMode)
 double deviationThresholdActive(GameMode gameMode, double currentElo)
 {
     dts::unused(gameMode);
-    return std::min(75.0, 65.0 + sqrt(abs(glicko::initialRating - currentElo)));
+    return std::min(95.0, 65.0 + sqrt(abs(glicko::initialRating - currentElo)));
+}
+
+/*!
+ */
+double deviationThresholdInactive(GameMode gameMode, double currentElo)
+{
+    return deviationThresholdActive(gameMode, currentElo) + 20.0;
 }
 
 /*!
@@ -147,20 +154,6 @@ uint32_t minGamesSinceActivationForPeak(GameMode gameMode)
     else
     {
         return 50;
-    }
-}
-
-/*!
- */
-double deviationThresholdInactive(GameMode gameMode, double currentElo)
-{
-    if (gameMode == GameMode::YurisRevenge)
-    {
-        return 85.0 + log(abs(glicko::initialRating - currentElo));
-    }
-    else
-    {
-        return 85.0 + sqrt(abs(glicko::initialRating - currentElo));
     }
 }
 

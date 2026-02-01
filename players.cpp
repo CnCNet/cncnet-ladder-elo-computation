@@ -252,7 +252,7 @@ std::map<uint32_t, uint32_t> Players::exportActivePlayers(const std::filesystem:
     }
 
     // Now sort the players.
-    if (gameMode == gamemodes::Blitz2v2)
+    if (gameMode == gamemodes::Blitz2v2 || gameMode == gamemodes::RedAlert2_2v2)
     {
         std::sort(filteredAndSortedPlayers.begin(), filteredAndSortedPlayers.end(),
                   [] (const Player *a, const Player *b) { return a->elo(factions::Combined) > b->elo(factions::Combined);});
@@ -289,11 +289,11 @@ std::map<uint32_t, uint32_t> Players::exportActivePlayers(const std::filesystem:
         jsonPlayer["delta_rank"] = rankYesterday - static_cast<int>(i + 1);
         jsonPlayer["name"] = player->alias();
 
-        factions::Faction faction = (gameMode == gamemodes::Blitz2v2) ? factions::Combined : player->getBestFaction();
+        factions::Faction faction = (gameMode == gamemodes::Blitz2v2 || gameMode == gamemodes::RedAlert2_2v2) ? factions::Combined : player->getBestFaction();
         jsonPlayer["faction"] = factions::shortName(faction);
 
         std::ostringstream oss;
-        if (gameMode == gamemodes::Blitz2v2)
+        if (gameMode == gamemodes::Blitz2v2 || gameMode == gamemodes::RedAlert2_2v2)
         {
             jsonPlayer["elo"] = static_cast<int>(player->elo(factions::Combined));
             jsonPlayer["delta_elo"] = static_cast<int>(player->elo(factions::Combined) - player->yesterdaysElo(factions::Combined));
@@ -369,7 +369,7 @@ std::map<uint32_t, uint32_t> Players::exportBestOfAllTime(
     for (auto it = _players.cbegin(); it != _players.cend(); ++it)
     {
         const Player &player = it->second;
-        PeakRating peak = (gameMode == gamemodes::Blitz2v2) ? player.peakRating(factions::Combined) : player.peakRating();
+        PeakRating peak = (gameMode == gamemodes::Blitz2v2 || gameMode == gamemodes::RedAlert2_2v2) ? player.peakRating(factions::Combined) : player.peakRating();
         if (peak.adjustedElo > 0.0)
         {
             filteredAndSortedPlayers.push_back(&player);
@@ -377,7 +377,7 @@ std::map<uint32_t, uint32_t> Players::exportBestOfAllTime(
     }
 
     // Now sort the players.
-    if (gameMode == gamemodes::Blitz2v2)
+    if (gameMode == gamemodes::Blitz2v2 || gameMode == gamemodes::RedAlert2_2v2)
     {
         std::sort(filteredAndSortedPlayers.begin(), filteredAndSortedPlayers.end(),
                   [] (const Player *a, const Player *b) { return a->peakRating(factions::Combined).adjustedElo > b->peakRating(factions::Combined).adjustedElo; });
@@ -412,7 +412,7 @@ std::map<uint32_t, uint32_t> Players::exportBestOfAllTime(
 
         const Player *player = filteredAndSortedPlayers[i];
 
-        PeakRating peak = (gameMode == gamemodes::Blitz2v2) ? player->peakRating(factions::Combined) : player->peakRating();
+        PeakRating peak = (gameMode == gamemodes::Blitz2v2 || gameMode == gamemodes::RedAlert2_2v2) ? player->peakRating(factions::Combined) : player->peakRating();
 
         jsonPlayer["rank"] = i + 1;
         jsonPlayer["name"] = player->alias();
